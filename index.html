@@ -379,11 +379,11 @@ function makeSigPad(canvas, maxDim) {
   let hasSig = false;
 
   function resize() {
-    // cap resolution so exported signatures stay small (this matters for the licensor
-    // pad since it gets saved as a PNG file; the guest pad only feeds the PDF so it's less critical)
+    if (hasSig) return; // don't rescale/resample once signing has started — mobile browsers
+                         // fire resize events constantly (address bar collapsing, etc.) and
+                         // each rescale re-samples the drawing, degrading quality over time
     const ratio = window.devicePixelRatio || 1;
     const rect = canvas.getBoundingClientRect();
-    const prevData = hasSig ? canvas.toDataURL() : null;
     canvas.width = rect.width * ratio;
     canvas.height = rect.height * ratio;
     ctx.scale(ratio, ratio);
@@ -391,11 +391,6 @@ function makeSigPad(canvas, maxDim) {
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
     ctx.strokeStyle = '#1a1a1a';
-    if (prevData) {
-      const img = new Image();
-      img.onload = () => ctx.drawImage(img, 0, 0, rect.width, rect.height);
-      img.src = prevData;
-    }
   }
   resize();
   window.addEventListener('resize', resize);
