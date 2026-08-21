@@ -89,6 +89,19 @@
   #submitBtn:hover { background: #1e3e2e; }
   #submitBtn:disabled { background: #999; cursor: default; }
   #status, #adminStatus { text-align: center; margin-top: 12px; font-family: Arial, sans-serif; font-size: 13px; color: #2b5540; }
+  details.clause { margin-top: 10px; }
+  details.clause summary {
+    font-size: 15px; text-transform: uppercase; letter-spacing: 0.5px;
+    border-bottom: 1px solid #ccc; padding-bottom: 4px; margin-top: 18px; font-family: Arial, sans-serif;
+    font-weight: bold; cursor: pointer; list-style: none; display: flex; align-items: center; justify-content: space-between;
+  }
+  details.clause summary::-webkit-details-marker { display: none; }
+  details.clause summary::after {
+    content: '+'; font-size: 18px; color: #2b5540; margin-left: 10px; flex-shrink: 0;
+  }
+  details.clause[open] summary::after { content: '−'; }
+  details.clause summary:hover { color: #2b5540; }
+  details.clause .clause-body { padding-top: 6px; }
   #linkOut {
     font-family: Arial, sans-serif; font-size: 12.5px; background: #eef4ef; border: 1px solid #cde0d1;
     border-radius: 6px; padding: 10px; margin-top: 10px; word-break: break-all; display: none;
@@ -194,7 +207,7 @@
       </div>
     </div>
     <div class="field" id="rulesFieldWrap">
-      <label>House Rules (editable — shown in Clause 6 below)</label>
+      <label>House Rules (editable — shown in Clause 1 below)</label>
       <textarea id="rulesBox">- No parties, functions or events.
 - Quiet hours 10:00pm–8:00am.
 - No smoking inside the dwelling.
@@ -242,43 +255,83 @@
     </div>
   </div>
 
-  <h2>1. Parties &amp; Property</h2>
-  <p>This Licence to Occupy ("Licence") is made between <b id="out-licensor">Kim [Surname]</b> ("the Licensor") and <b id="out-licensee">[Guest Name]</b> ("the Licensee"), in relation to the property known as Howqua Hideaway, located at 484 Howqua River Road, Howqua, Victoria 3723 ("the Property").</p>
+  <details class="clause" open>
+    <summary>1. House Rules</summary>
+    <div class="clause-body">
+      <p>The Licensee agrees to comply with the following house rules, which form part of this Licence:</p>
+      <p style="white-space: pre-line;" id="out-rules"></p>
+    </div>
+  </details>
 
-  <h2>2. Nature of Licence</h2>
-  <p>This is a personal Licence to Occupy the Property for short-term recreational and holiday purposes only. It is <b>not</b> a lease or tenancy agreement and does not grant the Licensee exclusive possession of the Property. The Licensee acquires no interest in the Property beyond the right to occupy it in accordance with this Licence for the Term set out below. This Licence is not subject to the <i>Residential Tenancies Act 1997</i> (Vic).</p>
+  <details class="clause" open>
+    <summary>2. Licence Fee &amp; Bond</summary>
+    <div class="clause-body">
+      <p>The total Licence Fee payable is <b id="out-fee">[fee]</b>, payable in accordance with the booking arrangement agreed with the Licensor. A bond of <b id="out-bond">[bond]</b> is payable prior to occupancy. The bond will be refunded within 7 days of check-out, less any amount reasonably deducted by the Licensor for damage, excess cleaning, missing items, or breach of this Licence.</p>
+    </div>
+  </details>
 
-  <h2>3. Term</h2>
-  <p>The Licence commences at check-in on <b id="out-checkin">[check-in]</b> and ends at check-out on <b id="out-checkout">[check-out]</b> ("the Term"). The Licensee must vacate the Property in full by the check-out time stated, unless otherwise agreed in writing with the Licensor.</p>
+  <details class="clause">
+    <summary>3. Parties &amp; Property</summary>
+    <div class="clause-body">
+      <p>This Licence to Occupy ("Licence") is made between <b id="out-licensor">Kim [Surname]</b> ("the Licensor") and <b id="out-licensee">[Guest Name]</b> ("the Licensee"), in relation to the property known as Howqua Hideaway, located at 484 Howqua River Road, Howqua, Victoria 3723 ("the Property").</p>
+    </div>
+  </details>
 
-  <h2>4. Occupancy Limit</h2>
-  <p>The Property is licensed for occupation by no more than <b id="out-occupants">4</b> persons at any time. The Licensee must not permit additional persons to stay overnight without the Licensor's prior written consent.</p>
+  <details class="clause">
+    <summary>4. Nature of Licence</summary>
+    <div class="clause-body">
+      <p>This is a personal Licence to Occupy the Property for short-term recreational and holiday purposes only. It is <b>not</b> a lease or tenancy agreement and does not grant the Licensee exclusive possession of the Property. The Licensee acquires no interest in the Property beyond the right to occupy it in accordance with this Licence for the Term set out below. This Licence is not subject to the <i>Residential Tenancies Act 1997</i> (Vic).</p>
+    </div>
+  </details>
 
-  <h2>5. Licence Fee &amp; Bond</h2>
-  <p>The total Licence Fee payable is <b id="out-fee">[fee]</b>, payable in accordance with the booking arrangement agreed with the Licensor. A bond of <b id="out-bond">[bond]</b> is payable prior to occupancy. The bond will be refunded within 7 days of check-out, less any amount reasonably deducted by the Licensor for damage, excess cleaning, missing items, or breach of this Licence.</p>
+  <details class="clause">
+    <summary>5. Term</summary>
+    <div class="clause-body">
+      <p>The Licence commences at check-in on <b id="out-checkin">[check-in]</b> and ends at check-out on <b id="out-checkout">[check-out]</b> ("the Term"). The Licensee must vacate the Property in full by the check-out time stated, unless otherwise agreed in writing with the Licensor.</p>
+    </div>
+  </details>
 
-  <h2>6. House Rules</h2>
-  <p>The Licensee agrees to comply with the following house rules, which form part of this Licence:</p>
-  <p style="white-space: pre-line;" id="out-rules"></p>
+  <details class="clause">
+    <summary>6. Occupancy Limit</summary>
+    <div class="clause-body">
+      <p>The Property is licensed for occupation by no more than <b id="out-occupants">4</b> persons at any time. The Licensee must not permit additional persons to stay overnight without the Licensor's prior written consent.</p>
+    </div>
+  </details>
 
-  <h2>7. Licensee Obligations</h2>
-  <p>The Licensee agrees to:</p>
-  <ul>
-    <li>Take reasonable care of the Property, its fixtures, fittings and contents;</li>
-    <li>Report any damage or malfunction to the Licensor as soon as practicable;</li>
-    <li>Not sublet, assign, or share access to the Property with persons outside the agreed occupancy;</li>
-    <li>Leave the Property in a clean and tidy condition, consistent with its condition at check-in;</li>
-    <li>Be responsible for the conduct of all persons the Licensee permits onto the Property during the Term.</li>
-  </ul>
+  <details class="clause">
+    <summary>7. Licensee Obligations</summary>
+    <div class="clause-body">
+      <p>The Licensee agrees to:</p>
+      <ul>
+        <li>Take reasonable care of the Property, its fixtures, fittings and contents;</li>
+        <li>Report any damage or malfunction to the Licensor as soon as practicable;</li>
+        <li>Not sublet, assign, or share access to the Property with persons outside the agreed occupancy;</li>
+        <li>Leave the Property in a clean and tidy condition, consistent with its condition at check-in;</li>
+        <li>Be responsible for the conduct of all persons the Licensee permits onto the Property during the Term.</li>
+      </ul>
+    </div>
+  </details>
 
-  <h2>8. Liability</h2>
-  <p>The Licensee occupies and uses the Property, including any outdoor areas, fire pit, water frontage, and equipment, at their own risk. To the extent permitted by law, the Licensor is not liable for any injury, loss or damage suffered by the Licensee or their guests during the Term, except to the extent caused by the Licensor's negligence.</p>
+  <details class="clause">
+    <summary>8. Liability</summary>
+    <div class="clause-body">
+      <p>The Licensee occupies and uses the Property, including any outdoor areas, fire pit, water frontage, and equipment, at their own risk. To the extent permitted by law, the Licensor is not liable for any injury, loss or damage suffered by the Licensee or their guests during the Term, except to the extent caused by the Licensor's negligence.</p>
+    </div>
+  </details>
 
-  <h2>9. Termination</h2>
-  <p>The Licensor may terminate this Licence immediately and require the Licensee to vacate the Property if the Licensee breaches any term of this Licence, including the house rules, exceeds the occupancy limit, or causes damage or nuisance. No refund of the Licence Fee is guaranteed in such circumstances.</p>
+  <details class="clause">
+    <summary>9. Termination</summary>
+    <div class="clause-body">
+      <p>The Licensor may terminate this Licence immediately and require the Licensee to vacate the Property if the Licensee breaches any term of this Licence, including the house rules, exceeds the occupancy limit, or causes damage or nuisance. No refund of the Licence Fee is guaranteed in such circumstances.</p>
+    </div>
+  </details>
 
-  <h2>10. Governing Law</h2>
-  <p>This Licence is governed by the laws of Victoria, Australia.</p>
+  <details class="clause">
+    <summary>10. Governing Law</summary>
+    <div class="clause-body">
+      <p>This Licence is governed by the laws of Victoria, Australia.</p>
+    </div>
+  </details>
 
   <h2>Signatures</h2>
 
@@ -751,6 +804,10 @@ document.getElementById('submitBtn').addEventListener('click', async () => {
       }
     }
   }
+
+  // force every clause open for the PDF record — collapsed sections are a screen convenience,
+  // the signed document must always show the full terms regardless of what was clicked open
+  document.querySelectorAll('details.clause').forEach(d => { d.open = true; });
 
   try {
     await loadHtml2Canvas();
