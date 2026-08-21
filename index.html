@@ -325,6 +325,13 @@
 <script>
 const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbw9xxQ6MXuGN0CqT5Buc11HLMMkR5yOpqLfmczFzjI0whrYMVaaojJGu4mvMOmG0BgCmQ/exec';
 const SIGNATURE_FILENAME = 'licensor-signature.png';
+const DEFAULT_RULES = `- No parties, functions or events.
+- Quiet hours 10:00pm–8:00am.
+- No smoking inside the dwelling.
+- Pets only with prior written approval.
+- Maximum of 4 occupants on the property at any time.
+- All rubbish removed or placed in designated bins on departure.
+- Fires only in designated fire pit/fireplace, fully extinguished before departure.`;
 const fieldIds = ['licensor','licenseeName','licenseePhone','licenseeEmail','occupants','checkin','checkout','fee','bond'];
 
 const bind = (id, outId, fallback) => {
@@ -574,7 +581,9 @@ document.getElementById('genLinkBtn').addEventListener('click', () => {
   const adminStatus = document.getElementById('adminStatus');
   const data = {};
   fieldIds.forEach(id => { data[id] = document.getElementById(id).value; });
-  data.rules = rulesBox.value;
+  if (rulesBox.value.trim() !== DEFAULT_RULES.trim()) {
+    data.rules = rulesBox.value;
+  }
   data.licensorSignedDate = new Date().toLocaleDateString('en-AU');
 
   const json = JSON.stringify(data);
