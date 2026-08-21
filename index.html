@@ -381,7 +381,7 @@ function makeSigPad(canvas, maxDim) {
   function resize() {
     // cap resolution so exported signatures stay small (this matters for the licensor
     // pad since it gets saved as a PNG file; the guest pad only feeds the PDF so it's less critical)
-    const ratio = Math.min(window.devicePixelRatio || 1, maxDim ? 1 : 2);
+    const ratio = Math.min(window.devicePixelRatio || 1, maxDim ? 2 : 3);
     const rect = canvas.getBoundingClientRect();
     const prevData = hasSig ? canvas.toDataURL() : null;
     canvas.width = rect.width * ratio;
@@ -402,7 +402,6 @@ function makeSigPad(canvas, maxDim) {
 
   function getPos(e) {
     const rect = canvas.getBoundingClientRect();
-    if (e.touches && e.touches.length) return { x: e.touches[0].clientX - rect.left, y: e.touches[0].clientY - rect.top };
     return { x: e.clientX - rect.left, y: e.clientY - rect.top };
   }
   let lastPoint = null;
@@ -412,27 +411,35 @@ function makeSigPad(canvas, maxDim) {
     lastPoint = p;
     ctx.beginPath();
     ctx.moveTo(p.x, p.y);
+    canvas.setPointerCapture(e.pointerId);
     e.preventDefault();
   }
   function move(e) {
     if (!drawing) return;
+    // use pen pressure for a natural varying line width where the device supports it
+    // (pressure is 0.5 for mouse/touch without pressure sensors — 0 or 1 for genuine stylus input)
+    if (e.pointerType === 'pen' && e.pressure > 0) {
+      ctx.lineWidth = 1.2 + e.pressure * 2.6;
+    } else {
+      ctx.lineWidth = 2.4;
+    }
     const p = getPos(e);
     const midX = (lastPoint.x + p.x) / 2;
     const midY = (lastPoint.y + p.y) / 2;
     ctx.quadraticCurveTo(lastPoint.x, lastPoint.y, midX, midY);
     ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(midX, midY);
     lastPoint = p;
     e.preventDefault();
   }
   function end() { drawing = false; lastPoint = null; }
 
-  canvas.addEventListener('mousedown', start);
-  canvas.addEventListener('mousemove', move);
-  canvas.addEventListener('mouseup', end);
-  canvas.addEventListener('mouseleave', end);
-  canvas.addEventListener('touchstart', start, { passive: false });
-  canvas.addEventListener('touchmove', move, { passive: false });
-  canvas.addEventListener('touchend', end);
+  canvas.addEventListener('pointerdown', start);
+  canvas.addEventListener('pointermove', move);
+  canvas.addEventListener('pointerup', end);
+  canvas.addEventListener('pointercancel', end);
+  canvas.style.touchAction = 'none';
 
   return {
     clear: () => { ctx.clearRect(0, 0, canvas.width, canvas.height); hasSig = false; },
