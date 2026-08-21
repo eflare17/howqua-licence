@@ -68,7 +68,7 @@
     touch-action: none; background: #fff; display: block;
   }
   img.sigImg {
-    border: 1px solid #ddd; border-radius: 4px; max-width: 260px; height: 100px;
+    border: 1px solid #ddd; border-radius: 4px; width: 100%; height: 130px;
     object-fit: contain; background: #fff; display: block;
   }
   .sig-fallback {
@@ -312,6 +312,9 @@
     </div>
     <div id="adminStatus"></div>
     <div id="linkOut"></div>
+    <div id="shortenBar" style="display:none; margin-top: 8px;">
+      <button id="shortenLinkBtn" style="background: #55503a; color: #fff; border: none; padding: 8px 16px; font-size: 13px; border-radius: 6px; cursor: pointer; font-family: Arial, sans-serif;">Shorten this link</button>
+    </div>
   </div>
 
   <!-- Guest mode -->
@@ -384,8 +387,9 @@ function makeSigPad(canvas, maxDim) {
     canvas.width = rect.width * ratio;
     canvas.height = rect.height * ratio;
     ctx.scale(ratio, ratio);
-    ctx.lineWidth = 2;
+    ctx.lineWidth = 2.4;
     ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
     ctx.strokeStyle = '#1a1a1a';
     if (prevData) {
       const img = new Image();
@@ -401,9 +405,26 @@ function makeSigPad(canvas, maxDim) {
     if (e.touches && e.touches.length) return { x: e.touches[0].clientX - rect.left, y: e.touches[0].clientY - rect.top };
     return { x: e.clientX - rect.left, y: e.clientY - rect.top };
   }
-  function start(e) { drawing = true; hasSig = true; const p = getPos(e); ctx.beginPath(); ctx.moveTo(p.x, p.y); e.preventDefault(); }
-  function move(e) { if (!drawing) return; const p = getPos(e); ctx.lineTo(p.x, p.y); ctx.stroke(); e.preventDefault(); }
-  function end() { drawing = false; }
+  let lastPoint = null;
+  function start(e) {
+    drawing = true; hasSig = true;
+    const p = getPos(e);
+    lastPoint = p;
+    ctx.beginPath();
+    ctx.moveTo(p.x, p.y);
+    e.preventDefault();
+  }
+  function move(e) {
+    if (!drawing) return;
+    const p = getPos(e);
+    const midX = (lastPoint.x + p.x) / 2;
+    const midY = (lastPoint.y + p.y) / 2;
+    ctx.quadraticCurveTo(lastPoint.x, lastPoint.y, midX, midY);
+    ctx.stroke();
+    lastPoint = p;
+    e.preventDefault();
+  }
+  function end() { drawing = false; lastPoint = null; }
 
   canvas.addEventListener('mousedown', start);
   canvas.addEventListener('mousemove', move);
@@ -577,6 +598,39 @@ if (hash.startsWith('#data=')) {
 }
 
 // ---------- admin: generate link (text data only — no image) ----------
+let lastGeneratedLink = '';
+
+document.getElementById('shortenLinkBtn').addEventListener('click', async () => {
+  const adminStatus = document.getElementById('adminStatus');
+  const linkOut = document.getElementById('linkOut');
+  if (!lastGeneratedLink) return;
+
+  adminStatus.style.color = '#2b5540';
+  adminStatus.textContent = 'Shortening link...';
+
+  try {
+    const form = new FormData();
+    form.append('type', 'shorten');
+    form.append('longUrl', lastGeneratedLink);
+    const resp = await fetch(APPS_SCRIPT_URL, { method: 'POST', body: form });
+    const result = await resp.json();
+    if (result.success) {
+      navigator.clipboard.writeText(result.shortUrl).then(() => {
+        linkOut.textContent = '✓ Short link copied to clipboard — send this to the guest:\n' + result.shortUrl;
+      }).catch(() => {
+        linkOut.textContent = result.shortUrl;
+      });
+      adminStatus.textContent = 'Shortened!';
+    } else {
+      adminStatus.style.color = '#a33';
+      adminStatus.textContent = 'Could not shorten the link (' + (result.message || 'unknown error') + '). The full link above still works fine.';
+    }
+  } catch (err) {
+    adminStatus.style.color = '#a33';
+    adminStatus.textContent = 'Could not shorten the link (' + err.message + '). The full link above still works fine.';
+  }
+});
+
 document.getElementById('genLinkBtn').addEventListener('click', () => {
   const adminStatus = document.getElementById('adminStatus');
   const data = {};
@@ -590,9 +644,11 @@ document.getElementById('genLinkBtn').addEventListener('click', () => {
   const encoded = encodeURIComponent(b64EncodeUnicode(json));
   const baseUrl = window.location.origin + window.location.pathname;
   const link = baseUrl + '#data=' + encoded;
+  lastGeneratedLink = link;
 
   const linkOut = document.getElementById('linkOut');
   linkOut.style.display = 'block';
+  document.getElementById('shortenBar').style.display = 'block';
 
   navigator.clipboard.writeText(link).then(() => {
     linkOut.textContent = '✓ Link copied to clipboard (' + link.length + ' characters) — send this to the guest:\n' + link;
@@ -648,7 +704,6 @@ document.getElementById('submitBtn').addEventListener('click', async () => {
 
   submitBtn.disabled = true;
   statusEl.style.color = '#2b5540';
-  statusEl.textContent = 'Generating PDF...';
 
   document.getElementById('guestBanner').style.display = 'none';
   document.getElementById('guestActions').style.display = 'none';
