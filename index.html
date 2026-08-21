@@ -193,7 +193,7 @@
         <input type="text" id="bond" placeholder="$0.00">
       </div>
     </div>
-    <div class="field">
+    <div class="field" id="rulesFieldWrap">
       <label>House Rules (editable — shown in Clause 6 below)</label>
       <textarea id="rulesBox">- No parties, functions or events.
 - Quiet hours 10:00pm–8:00am.
@@ -509,7 +509,7 @@ function resizeImageFile(file, maxWidth) {
   });
 }
 
-const licensorPad = makeSigPad(document.getElementById('sigPadLicensor'), true);
+const licensorPad = makeSigPad(document.getElementById('sigPadLicensor'), false);
 const guestPad = makeSigPad(document.getElementById('sigPadGuest'), false);
 document.getElementById('clearSigLicensor').addEventListener('click', () => licensorPad.clear());
 document.getElementById('clearSigGuest').addEventListener('click', () => guestPad.clear());
@@ -560,6 +560,7 @@ if (hash.startsWith('#data=')) {
     if (data.rules !== undefined) rulesBox.value = data.rules;
     fieldIds.forEach(id => document.getElementById(id).disabled = true);
     rulesBox.disabled = true;
+    document.getElementById('rulesFieldWrap').style.display = 'none';
 
     document.getElementById('guestBanner').style.display = 'block';
 
