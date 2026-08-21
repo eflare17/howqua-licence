@@ -381,7 +381,7 @@ function makeSigPad(canvas, maxDim) {
   function resize() {
     // cap resolution so exported signatures stay small (this matters for the licensor
     // pad since it gets saved as a PNG file; the guest pad only feeds the PDF so it's less critical)
-    const ratio = Math.min(window.devicePixelRatio || 1, maxDim ? 2 : 3);
+    const ratio = window.devicePixelRatio || 1;
     const rect = canvas.getBoundingClientRect();
     const prevData = hasSig ? canvas.toDataURL() : null;
     canvas.width = rect.width * ratio;
