@@ -146,7 +146,7 @@
 </div>
 
 <script>
-const WEB3FORMS_KEY = 'd8495c89-8b76-40a0-b295-5c869a78f438';
+const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbw9xxQ6MXuGN0CqT5Buc11HLMMkR5yOpqLfmczFzjI0whrYMVaaojJGu4mvMOmG0BgCmQ/exec';
 const LICENCE_TOOL_URL = 'https://eflare17.github.io/howqua-licence/';
 
 function b64EncodeUnicode(str) {
@@ -280,25 +280,18 @@ document.getElementById('submitBtn').addEventListener('click', async () => {
   const prefillLink = LICENCE_TOOL_URL + '#prefill=' + encoded;
 
   const formData = new FormData();
-  formData.append('access_key', WEB3FORMS_KEY);
-  formData.append('subject', 'New Booking Request – ' + name);
-  formData.append('from_name', 'Howqua Hideaway Booking Request');
-  formData.append('message',
-    'New booking request:\n\n' +
-    'Name: ' + name + '\n' +
-    'Phone: ' + phone + '\n' +
-    'Email: ' + email + '\n' +
-    'Check-in: ' + checkin + '\n' +
-    'Check-out: ' + checkout + '\n' +
-    'Guests: ' + occupants + '\n' +
-    (message ? ('Message: ' + message + '\n') : '') +
-    '\n---\n' +
-    'Click here to open the Licence to Occupy pre-filled with these details:\n' +
-    prefillLink
-  );
+  formData.append('type', 'booking');
+  formData.append('licenseeName', name);
+  formData.append('licenseePhone', phone);
+  formData.append('licenseeEmail', email);
+  formData.append('checkin', checkin);
+  formData.append('checkout', checkout);
+  formData.append('occupants', occupants);
+  formData.append('message', message);
+  formData.append('prefillLink', prefillLink);
 
   try {
-    const resp = await fetch('https://api.web3forms.com/submit', { method: 'POST', body: formData });
+    const resp = await fetch(APPS_SCRIPT_URL, { method: 'POST', body: formData });
     const result = await resp.json();
     if (result.success) {
       document.getElementById('formWrap').style.display = 'none';

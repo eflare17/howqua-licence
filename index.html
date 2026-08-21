@@ -323,7 +323,7 @@
 </div>
 
 <script>
-const WEB3FORMS_KEY = 'd8495c89-8b76-40a0-b295-5c869a78f438';
+const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbw9xxQ6MXuGN0CqT5Buc11HLMMkR5yOpqLfmczFzjI0whrYMVaaojJGu4mvMOmG0BgCmQ/exec';
 const SIGNATURE_FILENAME = 'licensor-signature.png';
 const fieldIds = ['licensor','licenseeName','licenseePhone','licenseeEmail','occupants','checkin','checkout','fee','bond'];
 
@@ -471,7 +471,7 @@ function resizeImageFile(file, maxWidth) {
         cctx.fillStyle = '#fff';
         cctx.fillRect(0, 0, w, h);
         cctx.drawImage(img, 0, 0, w, h);
-        resolve({ dataUrl: c.toDataURL('image/jpeg', 0.75), width: w, height: h });
+        resolve({ dataUrl: c.toDataURL('image/jpeg', 0.85), width: w, height: h });
       };
       img.onerror = reject;
       img.src = e.target.result;
@@ -654,8 +654,8 @@ document.getElementById('submitBtn').addEventListener('click', async () => {
   try {
     await loadHtml2Canvas();
     const sheet = document.getElementById('sheet');
-    const rendered = await window.html2canvas(sheet, { scale: 1.5, backgroundColor: '#ffffff' });
-    const dataUrl = rendered.toDataURL('image/jpeg', 0.82);
+    const rendered = await window.html2canvas(sheet, { scale: 2.2, backgroundColor: '#ffffff' });
+    const dataUrl = rendered.toDataURL('image/jpeg', 0.92);
 
     const { jsPDF } = window.jspdf;
     const pdf = new jsPDF('p', 'pt', 'a4');
@@ -677,8 +677,8 @@ document.getElementById('submitBtn').addEventListener('click', async () => {
 
     // add licence photo pages
     statusEl.textContent = 'Attaching ID photos...';
-    const idFrontResized = await resizeImageFile(idFrontFile, 1000);
-    const idBackResized = await resizeImageFile(idBackFile, 1000);
+    const idFrontResized = await resizeImageFile(idFrontFile, 1400);
+    const idBackResized = await resizeImageFile(idBackFile, 1400);
     for (const [label, resized] of [['Licence – Front', idFrontResized], ['Licence – Back', idBackResized]]) {
       pdf.addPage();
       pdf.setFontSize(12);
@@ -693,7 +693,7 @@ document.getElementById('submitBtn').addEventListener('click', async () => {
     const pdfBlob = pdf.output('blob');
     const pdfSizeMB = pdfBlob.size / (1024 * 1024);
 
-    if (pdfSizeMB > 8) {
+    if (pdfSizeMB > 4.5) {
       statusEl.style.color = '#a33';
       statusEl.textContent = 'Your copy has downloaded, but the signed PDF is too large (' + pdfSizeMB.toFixed(1) + 'MB) to email automatically. Please send the downloaded file to the owner directly.';
       pdf.save(filename);
@@ -705,53 +705,41 @@ document.getElementById('submitBtn').addEventListener('click', async () => {
 
     const guestEmail = document.getElementById('licenseeEmail').value.trim();
     const guestPhone = document.getElementById('licenseePhone').value.trim();
-    const summaryText =
-      'Licence signed by: ' + licenseeName + '\n' +
-      'Phone: ' + guestPhone + '\n' +
-      'Email: ' + guestEmail + '\n' +
-      'Check-in: ' + document.getElementById('checkin').value + '\n' +
-      'Check-out: ' + document.getElementById('checkout').value + '\n' +
-      'Fee: ' + document.getElementById('fee').value + '\n' +
-      'Bond: ' + document.getElementById('bond').value + '\n' +
-      'Signed on: ' + new Date().toLocaleString('en-AU');
 
-    statusEl.textContent = 'Sending signed copy to the owner...';
-    const ownerForm = new FormData();
-    ownerForm.append('access_key', WEB3FORMS_KEY);
-    ownerForm.append('subject', 'Signed Licence to Occupy – ' + licenseeName);
-    ownerForm.append('from_name', 'Howqua Hideaway Licence Tool');
-    ownerForm.append('message', summaryText);
-    ownerForm.append('attachment', pdfBlob, filename);
-    const ownerResp = await fetch('https://api.web3forms.com/submit', { method: 'POST', body: ownerForm });
-    const ownerResult = await ownerResp.json();
+    statusEl.textContent = 'Sending signed copy...';
 
-    let guestSent = false;
-    if (guestEmail) {
-      statusEl.textContent = 'Sending your copy...';
-      const guestForm = new FormData();
-      guestForm.append('access_key', WEB3FORMS_KEY);
-      guestForm.append('subject', 'Your Signed Licence to Occupy – Howqua Hideaway');
-      guestForm.append('from_name', 'Howqua Hideaway');
-      guestForm.append('email', guestEmail);
-      guestForm.append('message',
-        'Hi ' + licenseeName + ',\n\nAttached is your signed Licence to Occupy for Howqua Hideaway.\n\n' + summaryText
-      );
-      guestForm.append('attachment', pdfBlob, filename);
-      try {
-        const guestResp = await fetch('https://api.web3forms.com/submit', { method: 'POST', body: guestForm });
-        const guestResult = await guestResp.json();
-        guestSent = !!guestResult.success;
-      } catch (e) {
-        guestSent = false;
+    // convert PDF blob to base64 for the Apps Script backend
+    const pdfBase64 = await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result.split(',')[1]);
+      reader.onerror = reject;
+      reader.readAsDataURL(pdfBlob);
+    });
+
+    const sendForm = new FormData();
+    sendForm.append('type', 'licence');
+    sendForm.append('licenseeName', licenseeName);
+    sendForm.append('licenseePhone', guestPhone);
+    sendForm.append('licenseeEmail', guestEmail);
+    sendForm.append('checkin', document.getElementById('checkin').value);
+    sendForm.append('checkout', document.getElementById('checkout').value);
+    sendForm.append('fee', document.getElementById('fee').value);
+    sendForm.append('bond', document.getElementById('bond').value);
+    sendForm.append('pdfBase64', pdfBase64);
+
+    try {
+      const resp = await fetch(APPS_SCRIPT_URL, { method: 'POST', body: sendForm });
+      const result = await resp.json();
+      if (result.success) {
+        statusEl.textContent = 'Signed! Your copy has downloaded, been emailed to the property owner' +
+          (guestEmail ? (result.guestSent ? ', and sent to your email.' : ' — sending your email copy failed, but you have the download.') : '.');
+      } else {
+        statusEl.style.color = '#a33';
+        statusEl.textContent = 'PDF saved, but the email failed (' + (result.message || 'unknown error') + '). Please contact the owner directly.';
       }
-    }
-
-    if (ownerResult.success) {
-      statusEl.textContent = 'Signed! Your copy has downloaded, been emailed to the property owner' +
-        (guestEmail ? (guestSent ? ', and sent to your email.' : ' — sending your email copy failed, but you have the download.') : '.');
-    } else {
+    } catch (err) {
       statusEl.style.color = '#a33';
-      statusEl.textContent = 'PDF saved, but the email to the owner failed (' + (ownerResult.message || 'unknown error') + '). Please contact the owner directly.';
+      statusEl.textContent = 'PDF saved, but sending the email failed (' + err.message + '). Please contact the owner directly.';
     }
   } catch (err) {
     statusEl.style.color = '#a33';
