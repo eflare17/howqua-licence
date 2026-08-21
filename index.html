@@ -654,8 +654,8 @@ document.getElementById('submitBtn').addEventListener('click', async () => {
   try {
     await loadHtml2Canvas();
     const sheet = document.getElementById('sheet');
-    const rendered = await window.html2canvas(sheet, { scale: 2, backgroundColor: '#ffffff' });
-    const dataUrl = rendered.toDataURL('image/png');
+    const rendered = await window.html2canvas(sheet, { scale: 1.5, backgroundColor: '#ffffff' });
+    const dataUrl = rendered.toDataURL('image/jpeg', 0.82);
 
     const { jsPDF } = window.jspdf;
     const pdf = new jsPDF('p', 'pt', 'a4');
@@ -666,19 +666,19 @@ document.getElementById('submitBtn').addEventListener('click', async () => {
     let heightLeft = imgHeight;
     let position = 20;
 
-    pdf.addImage(dataUrl, 'PNG', 20, position, imgWidth, imgHeight);
+    pdf.addImage(dataUrl, 'JPEG', 20, position, imgWidth, imgHeight);
     heightLeft -= (pageHeight - 40);
     while (heightLeft > 0) {
       position = heightLeft - imgHeight + 20;
       pdf.addPage();
-      pdf.addImage(dataUrl, 'PNG', 20, position, imgWidth, imgHeight);
+      pdf.addImage(dataUrl, 'JPEG', 20, position, imgWidth, imgHeight);
       heightLeft -= pageHeight;
     }
 
     // add licence photo pages
     statusEl.textContent = 'Attaching ID photos...';
-    const idFrontResized = await resizeImageFile(idFrontFile, 1200);
-    const idBackResized = await resizeImageFile(idBackFile, 1200);
+    const idFrontResized = await resizeImageFile(idFrontFile, 1000);
+    const idBackResized = await resizeImageFile(idBackFile, 1000);
     for (const [label, resized] of [['Licence – Front', idFrontResized], ['Licence – Back', idBackResized]]) {
       pdf.addPage();
       pdf.setFontSize(12);
@@ -691,6 +691,16 @@ document.getElementById('submitBtn').addEventListener('click', async () => {
 
     const filename = 'Licence-to-Occupy-' + licenseeName.replace(/\s+/g, '-') + '.pdf';
     const pdfBlob = pdf.output('blob');
+    const pdfSizeMB = pdfBlob.size / (1024 * 1024);
+
+    if (pdfSizeMB > 8) {
+      statusEl.style.color = '#a33';
+      statusEl.textContent = 'Your copy has downloaded, but the signed PDF is too large (' + pdfSizeMB.toFixed(1) + 'MB) to email automatically. Please send the downloaded file to the owner directly.';
+      pdf.save(filename);
+      submitBtn.disabled = false;
+      return;
+    }
+
     pdf.save(filename);
 
     const guestEmail = document.getElementById('licenseeEmail').value.trim();

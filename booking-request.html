@@ -44,6 +44,38 @@
     display: none; text-align: center; font-family: Arial, sans-serif; padding: 20px 10px;
   }
   .confirm-box h2 { font-family: Georgia, serif; color: #2b5540; }
+  .range-calendar {
+    font-family: Arial, sans-serif; border: 1px solid #ccc; border-radius: 6px;
+    padding: 14px; background: #fafafa; user-select: none;
+  }
+  .cal-header {
+    display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px;
+  }
+  .cal-nav {
+    background: none; border: 1px solid #ccc; border-radius: 4px; width: 30px; height: 30px;
+    cursor: pointer; font-size: 14px; color: #2b5540;
+  }
+  .cal-nav:hover { background: #eef4ef; }
+  .cal-month-label { font-weight: bold; font-size: 14px; color: #333; }
+  .cal-weekdays {
+    display: grid; grid-template-columns: repeat(7, 1fr); font-size: 11px; color: #888;
+    text-align: center; margin-bottom: 4px;
+  }
+  .cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; }
+  .cal-day {
+    text-align: center; padding: 8px 0; font-size: 13px; border-radius: 4px; cursor: pointer;
+    color: #2b2b2b;
+  }
+  .cal-day:hover:not(.cal-disabled):not(.cal-empty) { background: #eef4ef; }
+  .cal-day.cal-empty { cursor: default; }
+  .cal-day.cal-disabled { color: #ccc; cursor: not-allowed; }
+  .cal-day.cal-selected-start, .cal-day.cal-selected-end {
+    background: #2b5540; color: #fff; font-weight: bold;
+  }
+  .cal-day.cal-in-range { background: #cde0d1; }
+  .range-summary {
+    font-family: Arial, sans-serif; font-size: 13px; color: #2b5540; margin-top: 8px; text-align: center;
+  }
 </style>
 </head>
 <body>
@@ -71,13 +103,20 @@
       </div>
     </div>
     <div class="field-row">
-      <div class="field">
-        <label>Check-in Date</label>
-        <input type="text" id="checkin" placeholder="e.g. 12 Sep 2026">
-      </div>
-      <div class="field">
-        <label>Check-out Date</label>
-        <input type="text" id="checkout" placeholder="e.g. 15 Sep 2026">
+      <div class="field" style="width:100%;">
+        <label>Select your stay (click check-in date, then click check-out date)</label>
+        <div id="rangeCalendar" class="range-calendar">
+          <div class="cal-header">
+            <button type="button" id="calPrev" class="cal-nav">&#8592;</button>
+            <div id="calMonthLabel" class="cal-month-label"></div>
+            <button type="button" id="calNext" class="cal-nav">&#8594;</button>
+          </div>
+          <div class="cal-weekdays">
+            <div>Su</div><div>Mo</div><div>Tu</div><div>We</div><div>Th</div><div>Fr</div><div>Sa</div>
+          </div>
+          <div id="calGrid" class="cal-grid"></div>
+        </div>
+        <div id="rangeSummary" class="range-summary">No dates selected yet</div>
       </div>
     </div>
     <div class="field-row">
@@ -114,6 +153,98 @@ function b64EncodeUnicode(str) {
   return btoa(encodeURIComponent(str).replace(/%([0-9A-F]{2})/g, (m, p1) => String.fromCharCode('0x' + p1)));
 }
 
+// ---------- range-select calendar ----------
+let calDisplayMonth = new Date();
+calDisplayMonth.setDate(1);
+let rangeStart = null;
+let rangeEnd = null;
+
+const monthLabelEl = document.getElementById('calMonthLabel');
+const calGridEl = document.getElementById('calGrid');
+const rangeSummaryEl = document.getElementById('rangeSummary');
+
+function isoDate(d) {
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+}
+function sameDay(a, b) {
+  return a && b && a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+}
+function formatNice(d) {
+  return d.toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' });
+}
+
+function renderCalendar() {
+  monthLabelEl.textContent = calDisplayMonth.toLocaleDateString('en-AU', { month: 'long', year: 'numeric' });
+  calGridEl.innerHTML = '';
+
+  const year = calDisplayMonth.getFullYear();
+  const month = calDisplayMonth.getMonth();
+  const firstDay = new Date(year, month, 1);
+  const startWeekday = firstDay.getDay();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  for (let i = 0; i < startWeekday; i++) {
+    const empty = document.createElement('div');
+    empty.className = 'cal-day cal-empty';
+    calGridEl.appendChild(empty);
+  }
+
+  for (let day = 1; day <= daysInMonth; day++) {
+    const d = new Date(year, month, day);
+    const cell = document.createElement('div');
+    cell.className = 'cal-day';
+    cell.textContent = day;
+
+    if (d < today) {
+      cell.classList.add('cal-disabled');
+    } else {
+      if (sameDay(d, rangeStart)) cell.classList.add('cal-selected-start');
+      if (sameDay(d, rangeEnd)) cell.classList.add('cal-selected-end');
+      if (rangeStart && rangeEnd && d > rangeStart && d < rangeEnd) cell.classList.add('cal-in-range');
+
+      cell.addEventListener('click', () => handleDayClick(d));
+    }
+    calGridEl.appendChild(cell);
+  }
+}
+
+function handleDayClick(d) {
+  if (!rangeStart || (rangeStart && rangeEnd)) {
+    rangeStart = d;
+    rangeEnd = null;
+  } else if (d < rangeStart) {
+    rangeStart = d;
+    rangeEnd = null;
+  } else {
+    rangeEnd = d;
+  }
+  updateSummary();
+  renderCalendar();
+}
+
+function updateSummary() {
+  if (rangeStart && rangeEnd) {
+    rangeSummaryEl.textContent = 'Check-in: ' + formatNice(rangeStart) + '   →   Check-out: ' + formatNice(rangeEnd);
+  } else if (rangeStart) {
+    rangeSummaryEl.textContent = 'Check-in: ' + formatNice(rangeStart) + '   —   now click your check-out date';
+  } else {
+    rangeSummaryEl.textContent = 'No dates selected yet';
+  }
+}
+
+document.getElementById('calPrev').addEventListener('click', () => {
+  calDisplayMonth.setMonth(calDisplayMonth.getMonth() - 1);
+  renderCalendar();
+});
+document.getElementById('calNext').addEventListener('click', () => {
+  calDisplayMonth.setMonth(calDisplayMonth.getMonth() + 1);
+  renderCalendar();
+});
+
+renderCalendar();
+
 document.getElementById('submitBtn').addEventListener('click', async () => {
   const statusEl = document.getElementById('status');
   const submitBtn = document.getElementById('submitBtn');
@@ -121,14 +252,14 @@ document.getElementById('submitBtn').addEventListener('click', async () => {
   const name = document.getElementById('licenseeName').value.trim();
   const phone = document.getElementById('licenseePhone').value.trim();
   const email = document.getElementById('licenseeEmail').value.trim();
-  const checkin = document.getElementById('checkin').value.trim();
-  const checkout = document.getElementById('checkout').value.trim();
+  const checkin = rangeStart ? formatNice(rangeStart) : '';
+  const checkout = rangeEnd ? formatNice(rangeEnd) : '';
   const occupants = document.getElementById('occupants').value;
   const message = document.getElementById('message').value.trim();
 
   if (!name || !email || !checkin || !checkout) {
     statusEl.style.color = '#a33';
-    statusEl.textContent = 'Please fill in your name, email, and check-in/check-out dates.';
+    statusEl.textContent = 'Please fill in your name, email, and select your check-in and check-out dates.';
     return;
   }
 
