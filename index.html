@@ -654,25 +654,53 @@ document.getElementById('submitBtn').addEventListener('click', async () => {
   try {
     await loadHtml2Canvas();
     const sheet = document.getElementById('sheet');
+    const sheetRect = sheet.getBoundingClientRect();
     const rendered = await window.html2canvas(sheet, { scale: 2.2, backgroundColor: '#ffffff' });
-    const dataUrl = rendered.toDataURL('image/jpeg', 0.92);
+    // measure the actual canvas-px-per-css-px ratio directly, rather than assuming it matches the scale option exactly
+    const renderScale = rendered.width / sheetRect.width;
 
     const { jsPDF } = window.jspdf;
     const pdf = new jsPDF('p', 'pt', 'a4');
     const pageWidth = pdf.internal.pageSize.getWidth();
     const pageHeight = pdf.internal.pageSize.getHeight();
-    const imgWidth = pageWidth - 40;
-    const imgHeight = (rendered.height * imgWidth) / rendered.width;
-    let heightLeft = imgHeight;
-    let position = 20;
+    const margin = 20;
+    const imgWidth = pageWidth - margin * 2;
+    const ptPerCanvasPx = imgWidth / rendered.width;
 
-    pdf.addImage(dataUrl, 'JPEG', 20, position, imgWidth, imgHeight);
-    heightLeft -= (pageHeight - 40);
-    while (heightLeft > 0) {
-      position = heightLeft - imgHeight + 20;
-      pdf.addPage();
-      pdf.addImage(dataUrl, 'JPEG', 20, position, imgWidth, imgHeight);
-      heightLeft -= pageHeight;
+    let cursorY = margin;
+    const cropCanvas = document.createElement('canvas');
+    const cropCtx = cropCanvas.getContext('2d');
+
+    // paginate section-by-section (each direct child of #sheet) so page breaks
+    // land between blocks, never through a line of text
+    const blocks = Array.from(sheet.children);
+    for (const block of blocks) {
+      const rect = block.getBoundingClientRect();
+      if (rect.height <= 0) continue; // hidden elements
+
+      const blockTopCanvasPx = (rect.top - sheetRect.top) * renderScale;
+      const blockHeightCanvasPx = rect.height * renderScale;
+      const blockHeightPt = blockHeightCanvasPx * ptPerCanvasPx;
+
+      // if this block alone is taller than a full page, just place it starting fresh
+      // (rare — only extremely long content would trigger this)
+      if (cursorY + blockHeightPt > pageHeight - margin && cursorY > margin) {
+        pdf.addPage();
+        cursorY = margin;
+      }
+
+      cropCanvas.width = rendered.width;
+      cropCanvas.height = Math.max(1, Math.round(blockHeightCanvasPx));
+      cropCtx.fillStyle = '#ffffff';
+      cropCtx.fillRect(0, 0, cropCanvas.width, cropCanvas.height);
+      cropCtx.drawImage(
+        rendered,
+        0, blockTopCanvasPx, rendered.width, blockHeightCanvasPx,
+        0, 0, cropCanvas.width, cropCanvas.height
+      );
+      const blockDataUrl = cropCanvas.toDataURL('image/jpeg', 0.92);
+      pdf.addImage(blockDataUrl, 'JPEG', margin, cursorY, imgWidth, blockHeightPt);
+      cursorY += blockHeightPt;
     }
 
     // add licence photo pages
