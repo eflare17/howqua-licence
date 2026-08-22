@@ -379,7 +379,7 @@
 </div>
 
 <script>
-const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbw9xxQ6MXuGN0CqT5Buc11HLMMkR5yOpqLfmczFzjI0whrYMVaaojJGu4mvMOmG0BgCmQ/exec';
+const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyC4GkZR3bs8Wj2zg8z2oBrsn2JBdoxE0Jcasp298k_QJ8kwzsjKh7mciabOJNSjSVV/exec';
 const SIGNATURE_FILENAME = 'licensor-signature.png';
 const DEFAULT_RULES = `- No parties, functions or events.
 - Quiet hours 10:00pm–8:00am.
@@ -828,38 +828,49 @@ document.getElementById('submitBtn').addEventListener('click', async () => {
     let cursorY = margin;
     const cropCanvas = document.createElement('canvas');
     const cropCtx = cropCanvas.getContext('2d');
+    const usablePageHeight = pageHeight - margin * 2;
 
-    // paginate section-by-section (each direct child of #sheet) so page breaks
-    // land between blocks, never through a line of text
-    const blocks = Array.from(sheet.children);
-    for (const block of blocks) {
-      const rect = block.getBoundingClientRect();
-      if (rect.height <= 0) continue; // hidden elements
-
-      const blockTopCanvasPx = (rect.top - sheetRect.top) * renderScale;
-      const blockHeightCanvasPx = rect.height * renderScale;
-      const blockHeightPt = blockHeightCanvasPx * ptPerCanvasPx;
-
-      // if this block alone is taller than a full page, just place it starting fresh
-      // (rare — only extremely long content would trigger this)
-      if (cursorY + blockHeightPt > pageHeight - margin && cursorY > margin) {
+    function placeSlice(topCanvasPx, heightCanvasPx) {
+      const heightPt = heightCanvasPx * ptPerCanvasPx;
+      if (cursorY + heightPt > pageHeight - margin && cursorY > margin) {
         pdf.addPage();
         cursorY = margin;
       }
-
       cropCanvas.width = rendered.width;
-      cropCanvas.height = Math.max(1, Math.round(blockHeightCanvasPx));
+      cropCanvas.height = Math.max(1, Math.round(heightCanvasPx));
       cropCtx.fillStyle = '#ffffff';
       cropCtx.fillRect(0, 0, cropCanvas.width, cropCanvas.height);
       cropCtx.drawImage(
         rendered,
-        0, blockTopCanvasPx, rendered.width, blockHeightCanvasPx,
+        0, topCanvasPx, rendered.width, heightCanvasPx,
         0, 0, cropCanvas.width, cropCanvas.height
       );
-      const blockDataUrl = cropCanvas.toDataURL('image/jpeg', 0.92);
-      pdf.addImage(blockDataUrl, 'JPEG', margin, cursorY, imgWidth, blockHeightPt);
-      cursorY += blockHeightPt;
+      const dataUrl = cropCanvas.toDataURL('image/jpeg', 0.92);
+      pdf.addImage(dataUrl, 'JPEG', margin, cursorY, imgWidth, heightPt);
+      cursorY += heightPt;
     }
+
+    // paginate section-by-section so page breaks land between blocks, never through
+    // a line of text. If a block is taller than a full page on its own, recurse into
+    // its own children (so a long clause with many paragraphs/list items still gets
+    // clean internal breaks instead of being clipped or overflowing off the page)
+    function placeBlock(el) {
+      const rect = el.getBoundingClientRect();
+      if (rect.height <= 0) return; // hidden elements
+
+      const topCanvasPx = (rect.top - sheetRect.top) * renderScale;
+      const heightCanvasPx = rect.height * renderScale;
+      const heightPt = heightCanvasPx * ptPerCanvasPx;
+
+      if (heightPt > usablePageHeight && el.children.length > 0) {
+        // too tall for one page — break it up by its own child elements instead
+        Array.from(el.children).forEach(child => placeBlock(child));
+      } else {
+        placeSlice(topCanvasPx, heightCanvasPx);
+      }
+    }
+
+    Array.from(sheet.children).forEach(block => placeBlock(block));
 
     // add licence photo pages
     statusEl.textContent = 'Attaching ID photos...';
