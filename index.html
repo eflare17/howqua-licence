@@ -108,7 +108,7 @@
   }
   #idUploadSection {
     font-family: Arial, sans-serif; background: #faf8f3; border: 1px solid #e2ddd0;
-    border-radius: 6px; padding: 18px; margin-top: 20px; display: block;
+    border-radius: 6px; padding: 18px; margin-top: 20px; display: none;
   }
   #idUploadSection h2 { margin-top: 0; }
   .id-note { font-size: 12px; color: #666; margin-bottom: 14px; }
@@ -198,24 +198,20 @@
     </div>
     <div class="field-row">
       <div class="field">
-        <label>Licence Fee (total, AUD)</label>
-        <input type="text" id="fee" placeholder="$0.00">
-      </div>
-      <div class="field">
         <label>Bond / Security Deposit (AUD)</label>
         <input type="text" id="bond" placeholder="$0.00">
       </div>
     </div>
-    <div class="field" id="rulesFieldWrap">
-      <label>House Rules (editable — shown in Clause 1 below)</label>
-      <textarea id="rulesBox">- No parties, functions or events.
+    <details class="field" id="rulesFieldWrap">
+      <summary style="cursor:pointer; font-size:12px; color:#555; font-weight:bold; font-family: Arial, sans-serif;">House Rules (click to edit — shown in Clause 1 below)</summary>
+      <textarea id="rulesBox" style="margin-top:8px;">- No parties, functions or events.
 - Quiet hours 10:00pm–8:00am.
 - No smoking inside the dwelling.
 - Pets only with prior written approval.
 - Maximum of 4 occupants on the property at any time.
 - All rubbish removed or placed in designated bins on departure.
 - Fires only in designated fire pit/fireplace, fully extinguished before departure.</textarea>
-    </div>
+    </details>
   </div>
 
   <div id="idUploadSection">
@@ -255,7 +251,10 @@
     </div>
   </div>
 
-  <details class="clause" open>
+  <details id="allClausesWrap">
+    <summary style="cursor:pointer; font-size:15px; text-transform:uppercase; letter-spacing:0.5px; border-bottom:1px solid #ccc; padding-bottom:4px; margin-top:18px; font-family: Arial, sans-serif; font-weight:bold;">Full Legal Terms (10 clauses)</summary>
+
+  <details class="clause" id="clause1">
     <summary>1. House Rules</summary>
     <div class="clause-body">
       <p>The Licensee agrees to comply with the following house rules, which form part of this Licence:</p>
@@ -263,10 +262,10 @@
     </div>
   </details>
 
-  <details class="clause" open>
-    <summary>2. Licence Fee &amp; Bond</summary>
+  <details class="clause" id="clause2">
+    <summary>2. Bond</summary>
     <div class="clause-body">
-      <p>The total Licence Fee payable is <b id="out-fee">[fee]</b>, payable in accordance with the booking arrangement agreed with the Licensor. A bond of <b id="out-bond">[bond]</b> is payable prior to occupancy. The bond will be refunded within 7 days of check-out, less any amount reasonably deducted by the Licensor for damage, excess cleaning, missing items, or breach of this Licence.</p>
+      <p>A bond of <b id="out-bond">[bond]</b> is payable prior to occupancy. The bond will be refunded within 7 days of check-out, less any amount reasonably deducted by the Licensor for damage, excess cleaning, missing items, or breach of this Licence.</p>
     </div>
   </details>
 
@@ -333,8 +332,12 @@
     </div>
   </details>
 
+  </details>
+
   <h2>Signatures</h2>
 
+  <details id="licensorSigWrap">
+    <summary style="cursor:pointer; font-size:13px; font-weight:bold; color:#333; font-family: Arial, sans-serif; margin-bottom:6px;">Licensor Signature (click to update — one-time setup)</summary>
   <div class="sig-block">
     <div class="sig-label" id="licensorSigLabel">Licensor Signature (Kim)</div>
     <canvas class="sigPad" id="sigPadLicensor"></canvas>
@@ -347,8 +350,9 @@
       Sign above once, click "Save Licensor Signature", then upload the downloaded <code>licensor-signature.png</code> into the same folder as this page on your hosting (Squarespace/GitHub Pages). Every guest link will then show this signature automatically — no need to re-sign each booking, and it keeps the shared link short.
     </div>
   </div>
+  </details>
 
-  <div class="sig-block">
+  <div class="sig-block" id="guestSigBlock" style="display:none;">
     <div class="sig-label" id="guestSigLabel">Licensee (Guest) Signature</div>
     <canvas class="sigPad" id="sigPadGuest"></canvas>
     <div class="sig-controls">
@@ -388,7 +392,7 @@ const DEFAULT_RULES = `- No parties, functions or events.
 - Maximum of 4 occupants on the property at any time.
 - All rubbish removed or placed in designated bins on departure.
 - Fires only in designated fire pit/fireplace, fully extinguished before departure.`;
-const fieldIds = ['licensor','licenseeName','licenseePhone','licenseeEmail','occupants','checkin','checkout','fee','bond'];
+const fieldIds = ['licensor','licenseeName','licenseePhone','licenseeEmail','occupants','checkin','checkout','bond'];
 
 const bind = (id, outId, fallback) => {
   const el = document.getElementById(id);
@@ -402,7 +406,6 @@ bind('licenseeName', 'out-licensee', '[Guest Name]');
 bind('checkin', 'out-checkin', '[check-in]');
 bind('checkout', 'out-checkout', '[check-out]');
 bind('occupants', 'out-occupants', '4');
-bind('fee', 'out-fee', '[fee]');
 bind('bond', 'out-bond', '[bond]');
 
 document.getElementById('licensor').addEventListener('input', function () {
@@ -492,7 +495,8 @@ function makeSigPad(canvas, maxDim) {
   return {
     clear: () => { ctx.clearRect(0, 0, canvas.width, canvas.height); hasSig = false; },
     hasSignature: () => hasSig,
-    dataUrl: () => canvas.toDataURL('image/png')
+    dataUrl: () => canvas.toDataURL('image/png'),
+    resize: resize
   };
 }
 
@@ -600,7 +604,7 @@ if (hash.startsWith('#prefill=')) {
     fieldIds.forEach(id => document.getElementById(id).dispatchEvent(new Event('input')));
     const adminStatus = document.getElementById('adminStatus');
     adminStatus.style.color = '#2b5540';
-    adminStatus.textContent = 'Booking request details loaded — add the fee and bond, confirm the rules, then sign and generate the guest link.';
+    adminStatus.textContent = 'Booking request details loaded — add the bond, confirm the rules, then sign and generate the guest link.';
   } catch (e) {
     console.error('Failed to parse prefill data', e);
   }
@@ -616,6 +620,15 @@ if (hash.startsWith('#data=')) {
     fieldIds.forEach(id => document.getElementById(id).disabled = true);
     rulesBox.disabled = true;
     document.getElementById('rulesFieldWrap').style.display = 'none';
+    document.getElementById('idUploadSection').style.display = 'block';
+    document.getElementById('clause1').open = true;
+    document.getElementById('clause2').open = true;
+    document.getElementById('allClausesWrap').open = true;
+    const licensorSigWrap = document.getElementById('licensorSigWrap');
+    licensorSigWrap.open = true;
+    licensorSigWrap.querySelector('summary').style.display = 'none';
+    document.getElementById('guestSigBlock').style.display = 'block';
+    guestPad.resize();
 
     document.getElementById('guestBanner').style.display = 'block';
 
@@ -733,6 +746,7 @@ async function loadHtml2Canvas() {
 document.getElementById('submitBtn').addEventListener('click', async () => {
   const statusEl = document.getElementById('status');
   const submitBtn = document.getElementById('submitBtn');
+  if (submitBtn.disabled) return; // already submitting or already sent — ignore a stray second click
   const licenseeName = document.getElementById('licenseeName').value.trim() || 'Guest';
 
   if (!document.getElementById('licenseeName').value.trim()) {
@@ -758,7 +772,7 @@ document.getElementById('submitBtn').addEventListener('click', async () => {
     return;
   }
 
-  submitBtn.disabled = true;
+  submitBtn.disabled = true; // disable immediately, before any further work, to block a rapid second click
   statusEl.style.color = '#2b5540';
 
   document.getElementById('guestBanner').style.display = 'none';
@@ -808,6 +822,26 @@ document.getElementById('submitBtn').addEventListener('click', async () => {
   // force every clause open for the PDF record — collapsed sections are a screen convenience,
   // the signed document must always show the full terms regardless of what was clicked open
   document.querySelectorAll('details.clause').forEach(d => { d.open = true; });
+  const allClausesWrap = document.getElementById('allClausesWrap');
+  if (allClausesWrap) allClausesWrap.open = true;
+  const licensorSigWrapPdf = document.getElementById('licensorSigWrap');
+  if (licensorSigWrapPdf) licensorSigWrapPdf.open = true;
+
+  // wait for every image on the page to be fully decoded before measuring anything —
+  // an image still loading mid-measurement can cause a late reflow that throws off
+  // the page-break calculations for whichever section happens to be measured at that moment
+  const sheetEl = document.getElementById('sheet');
+  await Promise.all(
+    Array.from(sheetEl.querySelectorAll('img')).map(img => {
+      if (img.complete && img.naturalWidth > 0) return Promise.resolve();
+      return new Promise(resolve => {
+        img.addEventListener('load', resolve, { once: true });
+        img.addEventListener('error', resolve, { once: true });
+      });
+    })
+  );
+  // let one animation frame pass so the browser fully settles layout after any image load
+  await new Promise(resolve => requestAnimationFrame(resolve));
 
   try {
     await loadHtml2Canvas();
@@ -920,7 +954,6 @@ document.getElementById('submitBtn').addEventListener('click', async () => {
     sendForm.append('licenseeEmail', guestEmail);
     sendForm.append('checkin', document.getElementById('checkin').value);
     sendForm.append('checkout', document.getElementById('checkout').value);
-    sendForm.append('fee', document.getElementById('fee').value);
     sendForm.append('bond', document.getElementById('bond').value);
     sendForm.append('pdfBase64', pdfBase64);
 
