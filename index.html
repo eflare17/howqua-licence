@@ -163,7 +163,7 @@
     <div class="field-row">
       <div class="field">
         <label>Licensor</label>
-        <input type="text" id="licensor" value="Kim [Surname]">
+        <input type="text" id="licensor" value="Kimberley Turner">
       </div>
       <div class="field">
         <label>Licensee (Guest) Full Name</label>
@@ -272,7 +272,7 @@
   <details class="clause">
     <summary>3. Parties &amp; Property</summary>
     <div class="clause-body">
-      <p>This Licence to Occupy ("Licence") is made between <b id="out-licensor">Kim [Surname]</b> ("the Licensor") and <b id="out-licensee">[Guest Name]</b> ("the Licensee"), in relation to the property known as Howqua Hideaway, located at 484 Howqua River Road, Howqua, Victoria 3723 ("the Property").</p>
+      <p>This Licence to Occupy ("Licence") is made between <b id="out-licensor">Kimberley Turner</b> ("the Licensor") and <b id="out-licensee">[Guest Name]</b> ("the Licensee"), in relation to the property known as Howqua Hideaway, located at 484 Howqua River Road, Howqua, Victoria 3723 ("the Property").</p>
     </div>
   </details>
 
@@ -293,7 +293,7 @@
   <details class="clause">
     <summary>6. Occupancy Limit</summary>
     <div class="clause-body">
-      <p>The Property is licensed for occupation by no more than <b id="out-occupants">4</b> persons at any time. The Licensee must not permit additional persons to stay overnight without the Licensor's prior written consent.</p>
+      <p>The Property is licensed for occupation by no more than 4 persons at any time. The Licensee must not permit additional persons to stay overnight without the Licensor's prior written consent.</p>
     </div>
   </details>
 
@@ -302,6 +302,7 @@
     <div class="clause-body">
       <p>The Licensee agrees to:</p>
       <ul>
+        <li>Abide by the house rules set out in this Licence;</li>
         <li>Take reasonable care of the Property, its fixtures, fittings and contents;</li>
         <li>Report any damage or malfunction to the Licensor as soon as practicable;</li>
         <li>Not sublet, assign, or share access to the Property with persons outside the agreed occupancy;</li>
@@ -314,14 +315,14 @@
   <details class="clause">
     <summary>8. Liability</summary>
     <div class="clause-body">
-      <p>The Licensee occupies and uses the Property, including any outdoor areas, fire pit, water frontage, and equipment, at their own risk. To the extent permitted by law, the Licensor is not liable for any injury, loss or damage suffered by the Licensee or their guests during the Term, except to the extent caused by the Licensor's negligence.</p>
+      <p>The Licensee occupies and uses the Property, including any outdoor areas, fire pit, and equipment, at their own risk. To the extent permitted by law, the Licensor is not liable for any injury, loss or damage suffered by the Licensee or their guests during the Term, except to the extent caused by the Licensor's negligence.</p>
     </div>
   </details>
 
   <details class="clause">
     <summary>9. Termination</summary>
     <div class="clause-body">
-      <p>The Licensor may terminate this Licence immediately and require the Licensee to vacate the Property if the Licensee breaches any term of this Licence, including the house rules, exceeds the occupancy limit, or causes damage or nuisance. No refund of the Licence Fee is guaranteed in such circumstances.</p>
+      <p>The Licensor may terminate this Licence immediately and require the Licensee to vacate the Property if the Licensee breaches any term of this Licence, including the house rules, exceeds the occupancy limit, or causes damage or nuisance.</p>
     </div>
   </details>
 
@@ -339,7 +340,7 @@
   <details id="licensorSigWrap">
     <summary style="cursor:pointer; font-size:13px; font-weight:bold; color:#333; font-family: Arial, sans-serif; margin-bottom:6px;">Licensor Signature (click to update — one-time setup)</summary>
   <div class="sig-block">
-    <div class="sig-label" id="licensorSigLabel">Licensor Signature (Kim)</div>
+    <div class="sig-label" id="licensorSigLabel">Licensor Signature (Kimberley Turner)</div>
     <canvas class="sigPad" id="sigPadLicensor"></canvas>
     <div class="sig-controls" id="licensorSigControls">
       <span style="font-size:12px; color:#888;">Sign above</span>
@@ -401,11 +402,10 @@ const bind = (id, outId, fallback) => {
   el.addEventListener('input', update);
   update();
 };
-bind('licensor', 'out-licensor', 'Kim [Surname]');
+bind('licensor', 'out-licensor', 'Kimberley Turner');
 bind('licenseeName', 'out-licensee', '[Guest Name]');
 bind('checkin', 'out-checkin', '[check-in]');
 bind('checkout', 'out-checkout', '[check-out]');
-bind('occupants', 'out-occupants', '4');
 bind('bond', 'out-bond', '[bond]');
 
 document.getElementById('licensor').addEventListener('input', function () {
