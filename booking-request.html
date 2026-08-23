@@ -193,6 +193,7 @@ calDisplayMonth.setDate(1);
 let rangeStart = null;
 let rangeEnd = null;
 let hoverDate = null;
+const minNightsByType = { minimoon: 3, anniversary: 2, standard: 2 };
 
 // auto-format phone number as 04xx xxx xxx while typing
 document.getElementById('licenseePhone').addEventListener('input', (e) => {
@@ -243,23 +244,24 @@ function renderCalendar() {
     const cell = document.createElement('div');
     cell.className = 'cal-day';
     cell.textContent = day;
+    cell.dataset.time = d.getTime();
 
-    if (d < today) {
+    const minNights = minNightsByType[document.getElementById('bookingType').value];
+    const tooSoonForCheckout = rangeStart && !rangeEnd && d > rangeStart &&
+      (d - rangeStart) / (1000 * 60 * 60 * 24) < minNights;
+
+    if (d < today || tooSoonForCheckout) {
       cell.classList.add('cal-disabled');
     } else {
       if (sameDay(d, rangeStart)) cell.classList.add('cal-selected-start');
       if (sameDay(d, rangeEnd)) cell.classList.add('cal-selected-end');
       if (rangeStart && rangeEnd && d > rangeStart && d < rangeEnd) cell.classList.add('cal-in-range');
-      // preview the range on hover once check-in is picked but check-out isn't yet
-      if (rangeStart && !rangeEnd && hoverDate && d > rangeStart && d <= hoverDate) {
-        cell.classList.add('cal-in-range');
-      }
 
       cell.addEventListener('click', () => handleDayClick(d));
       cell.addEventListener('mouseenter', () => {
         if (rangeStart && !rangeEnd && d > rangeStart) {
           hoverDate = d;
-          renderCalendar();
+          updateHoverHighlight();
         }
       });
     }
@@ -267,8 +269,22 @@ function renderCalendar() {
   }
 }
 
+// updates only the hover-preview highlighting on the existing cells, without
+// rebuilding the calendar grid — rebuilding on hover swaps out the DOM node
+// the user is about to click, which silently breaks the click right after
+function updateHoverHighlight() {
+  const cells = calGridEl.querySelectorAll('.cal-day:not(.cal-empty):not(.cal-disabled)');
+  cells.forEach(cell => {
+    if (!cell.dataset.time) return;
+    const t = Number(cell.dataset.time);
+    const isSelectedRange = rangeStart && rangeEnd && t > rangeStart.getTime() && t < rangeEnd.getTime();
+    const isHoverRange = rangeStart && !rangeEnd && hoverDate && t > rangeStart.getTime() && t <= hoverDate.getTime();
+    cell.classList.toggle('cal-in-range', !!(isSelectedRange || isHoverRange));
+  });
+}
+
 calGridEl.addEventListener('mouseleave', () => {
-  if (hoverDate) { hoverDate = null; renderCalendar(); }
+  if (hoverDate) { hoverDate = null; updateHoverHighlight(); }
 });
 
 function handleDayClick(d) {
@@ -295,6 +311,18 @@ function updateSummary() {
     rangeSummaryEl.textContent = 'No dates selected yet';
   }
 }
+
+document.getElementById('bookingType').addEventListener('change', () => {
+  if (rangeStart && rangeEnd) {
+    const minNights = minNightsByType[document.getElementById('bookingType').value];
+    const nights = (rangeEnd - rangeStart) / (1000 * 60 * 60 * 24);
+    if (nights < minNights) {
+      rangeEnd = null; // no longer meets the new package's minimum — ask them to re-pick check-out
+    }
+  }
+  updateSummary();
+  renderCalendar();
+});
 
 document.getElementById('calPrev').addEventListener('click', () => {
   calDisplayMonth.setMonth(calDisplayMonth.getMonth() - 1);
