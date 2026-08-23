@@ -124,11 +124,45 @@
         <label>Number of Guests (max 4)</label>
         <input type="number" id="occupants" max="4" min="1" value="2">
       </div>
+      <div class="field">
+        <label>Booking Type</label>
+        <select id="bookingType">
+          <option value="minimoon">Mini-Moon Package (min 3 nights)</option>
+          <option value="anniversary">Anniversary Package (min 2 nights)</option>
+          <option value="standard">Standard Stay (min 2 nights)</option>
+        </select>
+      </div>
     </div>
     <div class="field-row">
       <div class="field">
         <label>Anything else we should know? (optional)</label>
         <textarea id="message" placeholder="Special requests, questions, etc."></textarea>
+      </div>
+    </div>
+
+    <div class="field-row">
+      <div class="field" style="width:100%;">
+        <details id="policyBox" style="border:1px solid #ccc; border-radius:6px; padding:12px 14px; background:#faf8f3;">
+          <summary style="cursor:pointer; font-weight:bold; font-size:13px; color:#333;">House Rules &amp; Cancellation Policy (click to read)</summary>
+          <div style="margin-top:10px; font-size:13px; line-height:1.5; color:#333;">
+            <b>House Rules</b>
+            <ul style="margin-top:4px; padding-left:20px;">
+              <li>No parties, functions or events.</li>
+              <li>Quiet hours 10:00pm–8:00am.</li>
+              <li>No smoking inside the dwelling.</li>
+              <li>Pets only with prior written approval.</li>
+              <li>Maximum of 4 occupants on the property at any time.</li>
+              <li>All rubbish removed or placed in designated bins on departure.</li>
+              <li>Fires only in designated fire pit/fireplace, fully extinguished before departure.</li>
+            </ul>
+            <b>Cancellation Policy</b>
+            <p style="margin-top:4px;">(Draft — to be confirmed) Cancellations made more than 14 days before check-in receive a full refund of the licence fee. Cancellations within 14 days of check-in are non-refundable unless the dates are rebooked by another guest. The bond is fully refundable regardless of cancellation timing, provided it was paid.</p>
+          </div>
+        </details>
+        <label style="display:flex; align-items:flex-start; gap:8px; margin-top:10px; font-size:13px; font-family: Arial, sans-serif; cursor:pointer;">
+          <input type="checkbox" id="agreeRules" style="margin-top:3px;">
+          <span>I have read and agree to the House Rules and Cancellation Policy.</span>
+        </label>
       </div>
     </div>
 
@@ -158,6 +192,19 @@ let calDisplayMonth = new Date();
 calDisplayMonth.setDate(1);
 let rangeStart = null;
 let rangeEnd = null;
+let hoverDate = null;
+
+// auto-format phone number as 04xx xxx xxx while typing
+document.getElementById('licenseePhone').addEventListener('input', (e) => {
+  const digits = e.target.value.replace(/\D/g, '').slice(0, 10);
+  let formatted = digits;
+  if (digits.length > 4 && digits.length <= 7) {
+    formatted = digits.slice(0, 4) + ' ' + digits.slice(4);
+  } else if (digits.length > 7) {
+    formatted = digits.slice(0, 4) + ' ' + digits.slice(4, 7) + ' ' + digits.slice(7);
+  }
+  e.target.value = formatted;
+});
 
 const monthLabelEl = document.getElementById('calMonthLabel');
 const calGridEl = document.getElementById('calGrid');
@@ -203,12 +250,26 @@ function renderCalendar() {
       if (sameDay(d, rangeStart)) cell.classList.add('cal-selected-start');
       if (sameDay(d, rangeEnd)) cell.classList.add('cal-selected-end');
       if (rangeStart && rangeEnd && d > rangeStart && d < rangeEnd) cell.classList.add('cal-in-range');
+      // preview the range on hover once check-in is picked but check-out isn't yet
+      if (rangeStart && !rangeEnd && hoverDate && d > rangeStart && d <= hoverDate) {
+        cell.classList.add('cal-in-range');
+      }
 
       cell.addEventListener('click', () => handleDayClick(d));
+      cell.addEventListener('mouseenter', () => {
+        if (rangeStart && !rangeEnd && d > rangeStart) {
+          hoverDate = d;
+          renderCalendar();
+        }
+      });
     }
     calGridEl.appendChild(cell);
   }
 }
+
+calGridEl.addEventListener('mouseleave', () => {
+  if (hoverDate) { hoverDate = null; renderCalendar(); }
+});
 
 function handleDayClick(d) {
   if (!rangeStart || (rangeStart && rangeEnd)) {
@@ -220,6 +281,7 @@ function handleDayClick(d) {
   } else {
     rangeEnd = d;
   }
+  hoverDate = null;
   updateSummary();
   renderCalendar();
 }
@@ -256,10 +318,27 @@ document.getElementById('submitBtn').addEventListener('click', async () => {
   const checkout = rangeEnd ? formatNice(rangeEnd) : '';
   const occupants = document.getElementById('occupants').value;
   const message = document.getElementById('message').value.trim();
+  const bookingTypeSelect = document.getElementById('bookingType');
+  const bookingType = bookingTypeSelect.value;
+  const bookingTypeLabel = bookingTypeSelect.options[bookingTypeSelect.selectedIndex].text;
 
   if (!name || !email || !checkin || !checkout) {
     statusEl.style.color = '#a33';
     statusEl.textContent = 'Please fill in your name, email, and select your check-in and check-out dates.';
+    return;
+  }
+
+  const minNights = { minimoon: 3, anniversary: 2, standard: 2 };
+  const nightsSelected = rangeStart && rangeEnd ? Math.round((rangeEnd - rangeStart) / (1000 * 60 * 60 * 24)) : 0;
+  if (nightsSelected < minNights[bookingType]) {
+    statusEl.style.color = '#a33';
+    statusEl.textContent = 'The ' + bookingTypeLabel.split(' (')[0] + ' requires a minimum stay of ' + minNights[bookingType] + ' nights — please adjust your dates.';
+    return;
+  }
+
+  if (!document.getElementById('agreeRules').checked) {
+    statusEl.style.color = '#a33';
+    statusEl.textContent = 'Please confirm you have read the House Rules and Cancellation Policy.';
     return;
   }
 
@@ -288,6 +367,7 @@ document.getElementById('submitBtn').addEventListener('click', async () => {
   formData.append('checkout', checkout);
   formData.append('occupants', occupants);
   formData.append('message', message);
+  formData.append('bookingType', bookingTypeLabel);
   formData.append('prefillLink', prefillLink);
 
   try {
