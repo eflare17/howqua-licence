@@ -637,6 +637,7 @@ if (hash.startsWith('#data=')) {
     const licensorCanvas = document.getElementById('sigPadLicensor');
     const img = document.createElement('img');
     img.className = 'sigImg';
+    img.id = 'licensorSigImg';
     img.onload = () => {
       licensorCanvas.replaceWith(img);
       document.getElementById('licensorSigControls').style.display = 'none';
@@ -827,7 +828,7 @@ document.getElementById('submitBtn').addEventListener('click', async () => {
 
   // html2canvas doesn't respect object-fit: contain, so pre-bake the ID preview
   // thumbnails to their exact on-screen box before capturing, avoiding a squish
-  for (const previewId of ['idFrontPreview', 'idBackPreview']) {
+  for (const previewId of ['idFrontPreview', 'idBackPreview', 'licensorSigImg']) {
     const previewImg = document.getElementById(previewId);
     if (previewImg && previewImg.src) {
       const rect = previewImg.getBoundingClientRect();
