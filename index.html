@@ -38,8 +38,8 @@
   .field { flex: 1; min-width: 200px; }
   label { display: block; font-size: 12px; color: #555; margin-bottom: 4px; font-weight: bold; }
   input, textarea {
-    width: 100%; padding: 8px 10px; border: 1px solid #ccc; border-radius: 4px;
-    font-size: 14px; font-family: Arial, sans-serif;
+    width: 100%; padding: 8px 10px 11px 10px; border: 1px solid #ccc; border-radius: 4px;
+    font-size: 14px; font-family: Arial, sans-serif; line-height: 1.5;
   }
   input:disabled, textarea:disabled { background: #f0efe9; color: #333; border-color: #ddd; }
   textarea { resize: vertical; min-height: 70px; }
@@ -90,6 +90,7 @@
   #submitBtn:disabled { background: #999; cursor: default; }
   #status, #adminStatus { text-align: center; margin-top: 12px; font-family: Arial, sans-serif; font-size: 13px; color: #2b5540; }
   details.clause { margin-top: 10px; }
+  #allClausesWrap > details.clause:first-of-type { margin-top: 18px; }
   details.clause summary {
     font-size: 15px; text-transform: uppercase; letter-spacing: 0.5px;
     border-bottom: 1px solid #ccc; padding-bottom: 4px; margin-top: 18px; font-family: Arial, sans-serif;
@@ -146,7 +147,7 @@
   }
   .id-remove:hover { background: rgba(163,51,51,0.85); }
   .id-filename {
-    font-size: 11px; color: #2b5540; margin-top: 4px; font-family: Arial, sans-serif;
+    display: none;
   }
 </style>
 </head>
@@ -199,7 +200,7 @@
     <div class="field-row">
       <div class="field">
         <label>Bond / Security Deposit (AUD)</label>
-        <input type="text" id="bond" placeholder="$0.00">
+        <input type="text" id="bond" value="$300.00">
       </div>
     </div>
     <details class="field" id="rulesFieldWrap">
@@ -759,33 +760,38 @@ document.getElementById('submitBtn').addEventListener('click', async () => {
   const statusEl = document.getElementById('status');
   const submitBtn = document.getElementById('submitBtn');
   if (submitBtn.disabled) return; // already submitting or already sent — ignore a stray second click
+
+  // keeps the status message visible even as sections above it collapse/hide during processing,
+  // which otherwise shifts the page layout and leaves the message scrolled out of view
+  function setStatus(text, color) {
+    statusEl.style.color = color || '#2b5540';
+    statusEl.textContent = text;
+    statusEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+
   const licenseeName = document.getElementById('licenseeName').value.trim() || 'Guest';
 
   if (!document.getElementById('licenseeName').value.trim()) {
-    statusEl.style.color = '#a33';
-    statusEl.textContent = 'Please enter your full name before signing.';
+    setStatus('Please enter your full name before signing.', '#a33');
     return;
   }
   if (!document.getElementById('licenseeEmail').value.trim()) {
-    statusEl.style.color = '#a33';
-    statusEl.textContent = 'Please enter your email so we can send you a copy.';
+    setStatus('Please enter your email so we can send you a copy.', '#a33');
     return;
   }
   if (!guestPad.hasSignature()) {
-    statusEl.style.color = '#a33';
-    statusEl.textContent = 'Please sign in the signature box before submitting.';
+    setStatus('Please sign in the signature box before submitting.', '#a33');
     return;
   }
   const idFrontFile = idFiles.front;
   const idBackFile = idFiles.back;
   if (!idFrontFile || !idBackFile) {
-    statusEl.style.color = '#a33';
-    statusEl.textContent = 'Please add a photo of both the front and back of your licence.';
+    setStatus('Please add a photo of both the front and back of your licence.', '#a33');
     return;
   }
 
   submitBtn.disabled = true; // disable immediately, before any further work, to block a rapid second click
-  statusEl.style.color = '#2b5540';
+  setStatus('Preparing your signed document...');
 
   document.getElementById('guestBanner').style.display = 'none';
   document.getElementById('guestActions').style.display = 'none';
@@ -859,7 +865,9 @@ document.getElementById('submitBtn').addEventListener('click', async () => {
     await loadHtml2Canvas();
     const sheet = document.getElementById('sheet');
     const sheetRect = sheet.getBoundingClientRect();
+    statusEl.style.display = 'none'; // exclude the status message from the PDF capture — it's a live progress indicator, not part of the signed document
     const rendered = await window.html2canvas(sheet, { scale: 2.2, backgroundColor: '#ffffff' });
+    statusEl.style.display = 'block';
     // measure the actual canvas-px-per-css-px ratio directly, rather than assuming it matches the scale option exactly
     const renderScale = rendered.width / sheetRect.width;
 
@@ -919,7 +927,7 @@ document.getElementById('submitBtn').addEventListener('click', async () => {
     Array.from(sheet.children).forEach(block => placeBlock(block));
 
     // add licence photo pages
-    statusEl.textContent = 'Attaching ID photos...';
+    setStatus('Attaching ID photos...');
     const idFrontResized = await resizeImageFile(idFrontFile, 1400);
     const idBackResized = await resizeImageFile(idBackFile, 1400);
     for (const [label, resized] of [['Licence – Front', idFrontResized], ['Licence – Back', idBackResized]]) {
@@ -937,8 +945,7 @@ document.getElementById('submitBtn').addEventListener('click', async () => {
     const pdfSizeMB = pdfBlob.size / (1024 * 1024);
 
     if (pdfSizeMB > 4.5) {
-      statusEl.style.color = '#a33';
-      statusEl.textContent = 'Your copy has downloaded, but the signed PDF is too large (' + pdfSizeMB.toFixed(1) + 'MB) to email automatically. Please send the downloaded file to the owner directly.';
+      setStatus('Your copy has downloaded, but the signed PDF is too large (' + pdfSizeMB.toFixed(1) + 'MB) to email automatically. Please send the downloaded file to the owner directly.', '#a33');
       pdf.save(filename);
       submitBtn.disabled = false;
       return;
@@ -949,7 +956,7 @@ document.getElementById('submitBtn').addEventListener('click', async () => {
     const guestEmail = document.getElementById('licenseeEmail').value.trim();
     const guestPhone = document.getElementById('licenseePhone').value.trim();
 
-    statusEl.textContent = 'Sending signed copy...';
+    setStatus('Sending signed copy...');
 
     // convert PDF blob to base64 for the Apps Script backend
     const pdfBase64 = await new Promise((resolve, reject) => {
@@ -973,19 +980,16 @@ document.getElementById('submitBtn').addEventListener('click', async () => {
       const resp = await fetch(APPS_SCRIPT_URL, { method: 'POST', body: sendForm });
       const result = await resp.json();
       if (result.success) {
-        statusEl.textContent = 'Signed! Your copy has downloaded, been emailed to the property owner' +
-          (guestEmail ? (result.guestSent ? ', and sent to your email.' : ' — sending your email copy failed, but you have the download.') : '.');
+        setStatus('Signed! Your copy has downloaded, been emailed to the property owner' +
+          (guestEmail ? (result.guestSent ? ', and sent to your email.' : ' — sending your email copy failed, but you have the download.') : '.'));
       } else {
-        statusEl.style.color = '#a33';
-        statusEl.textContent = 'PDF saved, but the email failed (' + (result.message || 'unknown error') + '). Please contact the owner directly.';
+        setStatus('PDF saved, but the email failed (' + (result.message || 'unknown error') + '). Please contact the owner directly.', '#a33');
       }
     } catch (err) {
-      statusEl.style.color = '#a33';
-      statusEl.textContent = 'PDF saved, but sending the email failed (' + err.message + '). Please contact the owner directly.';
+      setStatus('PDF saved, but sending the email failed (' + err.message + '). Please contact the owner directly.', '#a33');
     }
   } catch (err) {
-    statusEl.style.color = '#a33';
-    statusEl.textContent = 'Error: ' + err.message;
+    setStatus('Error: ' + err.message, '#a33');
   }
 });
 </script>
