@@ -767,7 +767,7 @@ document.getElementById('submitBtn').addEventListener('click', async () => {
   function setStatus(text, color) {
     statusEl.style.color = color || '#2b5540';
     statusEl.textContent = text;
-    statusEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    statusEl.scrollIntoView({ behavior: 'auto', block: 'center' });
   }
 
   const licenseeName = document.getElementById('licenseeName').value.trim() || 'Guest';
@@ -861,6 +861,9 @@ document.getElementById('submitBtn').addEventListener('click', async () => {
   );
   // let one animation frame pass so the browser fully settles layout after any image load
   await new Promise(resolve => requestAnimationFrame(resolve));
+  // extra short pause to guarantee any scroll position has fully settled before we
+  // start measuring positions — an in-progress scroll here throws off every calculation below
+  await new Promise(resolve => setTimeout(resolve, 150));
 
   try {
     await loadHtml2Canvas();
@@ -925,7 +928,13 @@ document.getElementById('submitBtn').addEventListener('click', async () => {
       }
     }
 
-    Array.from(sheet.children).forEach(block => placeBlock(block));
+    Array.from(sheet.children).forEach(block => {
+      if (block.id === 'allClausesWrap' && cursorY > margin) {
+        pdf.addPage();
+        cursorY = margin;
+      }
+      placeBlock(block);
+    });
 
     // add licence photo pages
     setStatus('Attaching ID photos...');
