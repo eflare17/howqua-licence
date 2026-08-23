@@ -76,6 +76,31 @@
   .range-summary {
     font-family: Arial, sans-serif; font-size: 13px; color: #2b5540; margin-top: 8px; text-align: center;
   }
+  .agree-label {
+    display: flex; align-items: center; gap: 10px; margin-top: 12px; font-size: 13.5px;
+    font-family: Arial, sans-serif; cursor: pointer; white-space: nowrap; position: relative;
+  }
+  .agree-checkbox-input {
+    position: absolute; opacity: 0; width: 22px; height: 22px; margin: 0; cursor: pointer; z-index: 1;
+  }
+  .agree-checkbox-box {
+    display: inline-block; width: 19px; height: 19px; min-width: 19px; border: 2px solid #2b5540;
+    border-radius: 4px; background: #fff; position: relative; flex-shrink: 0;
+  }
+  .agree-checkbox-input:checked + .agree-checkbox-box {
+    background: #2b5540;
+  }
+  .agree-checkbox-input:checked + .agree-checkbox-box::after {
+    content: '';
+    position: absolute;
+    left: 5px;
+    top: 1px;
+    width: 5px;
+    height: 9px;
+    border: solid #fff;
+    border-width: 0 2px 2px 0;
+    transform: rotate(45deg);
+  }
 </style>
 </head>
 <body>
@@ -156,11 +181,25 @@
               <li>Outdoor fires only in designated fire pit.</li>
             </ul>
             <b>Cancellation Policy</b>
-            <p style="margin-top:4px;">(Draft — to be confirmed) Cancellations made more than 14 days before check-in receive a full refund of the licence fee. Cancellations within 14 days of check-in are non-refundable unless the dates are rebooked by another guest. The bond is fully refundable regardless of cancellation timing, provided it was paid.</p>
+            <p style="margin-top:8px; font-weight:bold;">Free Cancellation Period</p>
+            <p style="margin-top:2px;">Free cancellation period for a full refund is up to 14 days prior to the scheduled check-in date.</p>
+            <p style="margin-top:8px; font-weight:bold;">Moderate Period</p>
+            <p style="margin-top:2px;">Cancellations made between 7 and 13 days before check-in will receive a 50% refund of the total accommodation fee.</p>
+            <p style="margin-top:8px; font-weight:bold;">Non-Refundable Period</p>
+            <p style="margin-top:2px;">Cancellations made within 7 days of the check-in date, or failure to show up (no-show), are non-refundable.</p>
+            <p style="margin-top:8px; font-weight:bold;">Modifications &amp; Date Changes</p>
+            <p style="margin-top:2px;">Requests to change booking dates must be made at least 14 days prior to arrival and are subject to availability and seasonal rate differences. Date changes requested within the non-refundable window are treated as cancellations.</p>
+            <p style="margin-top:8px; font-weight:bold;">Host Right to Cancel</p>
+            <p style="margin-top:2px;">We reserve the right to cancel any booking at any time without a refund if it is discovered that false, misleading, or incomplete information has been provided regarding the guests staying (including undeclared guests, unauthorized pets, or violations of maximum occupancy limits and house rules).</p>
+            <p style="margin-top:8px; font-weight:bold;">Force Majeure</p>
+            <p style="margin-top:2px;">In the event of severe weather emergencies, natural disasters, mandatory government travel restrictions, or other extreme circumstances beyond either party's control, we will work with guests to reschedule or provide a credit/refund at our discretion.</p>
+            <p style="margin-top:8px; font-weight:bold;">Early Departures</p>
+            <p style="margin-top:2px;">If a guest chooses to shorten their stay or check out earlier than the booked departure date, the unused nights are strictly non-refundable.</p>
           </div>
         </details>
-        <label style="display:flex; align-items:flex-start; gap:8px; margin-top:10px; font-size:13px; font-family: Arial, sans-serif; cursor:pointer;">
-          <input type="checkbox" id="agreeRules" style="margin-top:3px;">
+        <label class="agree-label">
+          <input type="checkbox" id="agreeRules" class="agree-checkbox-input">
+          <span class="agree-checkbox-box"></span>
           <span>I have read and agree to the House Rules and Cancellation Policy.</span>
         </label>
       </div>
