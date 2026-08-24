@@ -4,7 +4,6 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Security Deposit — Howqua Hideaway</title>
-<script src="https://js.stripe.com/v3/"></script>
 <style>
   body { background: #e9e4d8; margin: 0; padding: 20px; }
   .sheet {
@@ -25,16 +24,14 @@
     background: #faf8f3; border: 1px solid #e2ddd0; border-radius: 6px; padding: 18px;
   }
   #bondHoldSection h2 { margin-top: 0; }
-  #cardElement { padding: 10px; border: 1px solid #ccc; border-radius: 4px; background: #fff; }
   #authorizeBondBtn {
     background: #2b5540; color: #fff; border: none; padding: 12px 28px;
     font-size: 14px; border-radius: 6px; cursor: pointer;
   }
   #authorizeBondBtn:disabled { opacity: 0.6; cursor: default; }
-  .preview-badge {
-    background: #fff3cd; border: 1px solid #ffe69c; color: #664d03;
-    font-size: 12px; padding: 8px 14px; border-radius: 6px; text-align: center;
-    margin-bottom: 20px;
+  .stripe-note {
+    display: flex; align-items: center; justify-content: center; gap: 6px;
+    font-size: 12px; color: #888; margin-top: 10px;
   }
 </style>
 </head>
@@ -52,19 +49,18 @@
   <div id="bondHoldSection">
     <h2>Security Deposit Hold</h2>
     <div style="font-size: 13px; color: #666; margin-bottom: 14px;">
-      Your card will be <b>authorized</b> for the security deposit amount (<span id="depositAmountInline">$0.00</span>) — this places a temporary hold, it does not charge you. The Licensor will release the hold after checkout if there's no damage, or claim against it if there is. Authorization holds also expire automatically after a few days if not actioned.
+      You'll be taken to Stripe's secure payment page to enter your card details. Your card will be <b>authorized</b> for the security deposit amount (<span id="depositAmountInline">$0.00</span>) — this places a temporary hold, it does not charge you. The Licensor will release the hold after checkout if there's no damage, or claim against it if there is. Authorization holds also expire automatically after a few days if not actioned.
     </div>
-    <div id="cardElement"></div>
-    <div style="text-align:center; margin-top: 14px;">
-      <button id="authorizeBondBtn">Authorize Security Deposit Hold</button>
+    <div style="text-align:center;">
+      <button id="authorizeBondBtn">Continue to Stripe to Authorize Hold</button>
     </div>
+    <div class="stripe-note">🔒 Payments handled securely by Stripe — your card details never touch this site.</div>
     <div id="bondHoldStatus" style="text-align:center; margin-top: 10px; font-size: 13px;"></div>
   </div>
 </div>
 
 <script>
 const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyC4GkZR3bs8Wj2zg8z2oBrsn2JBdoxE0Jcasp298k_QJ8kwzsjKh7mciabOJNSjSVV/exec';
-const STRIPE_PUBLISHABLE_KEY = 'pk_test_51U7YnNIvavyq88huIRT8msRXN1uw24KFEmki2dlJKqNFKLoIPGevYJXQ0wexTKXHFMTtQmFVNMaa2yxQuhRQ9Wgx00w6E3oX90';
 
 function b64DecodeUnicode(str) {
   return decodeURIComponent(atob(str).split('').map(c => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2)).join(''));
@@ -90,61 +86,52 @@ document.getElementById('bookingSummary').innerHTML =
   '<div><b>Deposit:</b> ' + (bookingData.bond || '(not provided)') + '</div>';
 document.getElementById('depositAmountInline').textContent = bookingData.bond || '(not set)';
 
-const stripe = Stripe(STRIPE_PUBLISHABLE_KEY);
-const elements = stripe.elements();
-const cardElement = elements.create('card', { hidePostalCode: true });
-cardElement.mount('#cardElement');
+// if we've just been returned from Stripe after a successful hold, show success and notify Kim
+const urlParams = new URLSearchParams(window.location.search);
+if (urlParams.get('paid') === 'true') {
+  document.getElementById('authorizeBondBtn').style.display = 'none';
+  const holdStatus = document.getElementById('bondHoldStatus');
+  holdStatus.style.color = '#2b5540';
+  holdStatus.textContent = '✓ Security deposit hold authorized. You can close this page now.';
 
-let bondHoldConfirmed = false;
+  const notifyForm = new FormData();
+  notifyForm.append('type', 'notify-deposit-authorized');
+  notifyForm.append('licenseeName', bookingData.licenseeName || 'Guest');
+  notifyForm.append('bond', bookingData.bond || '');
+  notifyForm.append('bondHoldRef', urlParams.get('session_id') || '');
+  fetch(APPS_SCRIPT_URL, { method: 'POST', body: notifyForm }).catch(() => {});
+}
 
 document.getElementById('authorizeBondBtn').addEventListener('click', async () => {
   const holdStatus = document.getElementById('bondHoldStatus');
   const authorizeBtn = document.getElementById('authorizeBondBtn');
 
-  if (bondHoldConfirmed) return;
   authorizeBtn.disabled = true;
   holdStatus.style.color = '#2b5540';
-  holdStatus.textContent = 'Creating hold...';
+  holdStatus.textContent = 'Redirecting to Stripe...';
 
   try {
-    const piForm = new FormData();
-    piForm.append('type', 'create-payment-intent');
-    piForm.append('amount', bookingData.bond || '0');
-    const piResp = await fetch(APPS_SCRIPT_URL, { method: 'POST', body: piForm });
-    const piResult = await piResp.json();
+    // build the return URLs — same page, same booking data, with a flag so we know it succeeded
+    const baseUrl = window.location.origin + window.location.pathname;
+    const successUrl = baseUrl + '?paid=true&session_id={CHECKOUT_SESSION_ID}' + window.location.hash;
+    const cancelUrl = baseUrl + window.location.hash;
 
-    if (!piResult.success) {
+    const form = new FormData();
+    form.append('type', 'create-checkout-session');
+    form.append('amount', bookingData.bond || '0');
+    form.append('successUrl', successUrl);
+    form.append('cancelUrl', cancelUrl);
+    const resp = await fetch(APPS_SCRIPT_URL, { method: 'POST', body: form });
+    const result = await resp.json();
+
+    if (!result.success) {
       holdStatus.style.color = '#a33';
-      holdStatus.textContent = 'Could not start security deposit hold: ' + (piResult.message || 'unknown error');
+      holdStatus.textContent = 'Could not start security deposit hold: ' + (result.message || 'unknown error');
       authorizeBtn.disabled = false;
       return;
     }
 
-    holdStatus.textContent = 'Confirming card details...';
-    const confirmResult = await stripe.confirmCardPayment(piResult.clientSecret, {
-      payment_method: { card: cardElement }
-    });
-
-    if (confirmResult.error) {
-      holdStatus.style.color = '#a33';
-      holdStatus.textContent = confirmResult.error.message + ' Please check your card details and try again.';
-      authorizeBtn.disabled = false;
-      return;
-    }
-
-    bondHoldConfirmed = true;
-    holdStatus.style.color = '#2b5540';
-    holdStatus.textContent = '✓ Security deposit hold authorized. You can close this page now.';
-    authorizeBtn.textContent = 'Security Deposit Hold Authorized';
-    cardElement.update({ disabled: true });
-
-    // let Kim know it went through, separately from the initial licence-signed email
-    const notifyForm = new FormData();
-    notifyForm.append('type', 'notify-deposit-authorized');
-    notifyForm.append('licenseeName', bookingData.licenseeName || 'Guest');
-    notifyForm.append('bond', bookingData.bond || '');
-    notifyForm.append('bondHoldRef', piResult.paymentIntentId || '');
-    fetch(APPS_SCRIPT_URL, { method: 'POST', body: notifyForm }).catch(() => {}); // best-effort, don't block the guest on this
+    window.location.href = result.checkoutUrl;
   } catch (err) {
     holdStatus.style.color = '#a33';
     holdStatus.textContent = 'Error: ' + err.message;
