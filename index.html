@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Licence to Occupy – Howqua Hideaway</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://js.stripe.com/v3/"></script>
 <style>
   * { box-sizing: border-box; }
   body {
@@ -199,7 +200,7 @@
     </div>
     <div class="field-row">
       <div class="field">
-        <label>Bond / Security Deposit (AUD)</label>
+        <label>Security Deposit (AUD)</label>
         <input type="text" id="bond" value="$300.00">
       </div>
     </div>
@@ -217,7 +218,7 @@
 
   <div id="idUploadSection">
     <h2>Photo ID</h2>
-    <div class="id-note">Please take a photo of (or upload) the front and back of your driver's licence. This is kept with your signed licence record only and used for identification and bond purposes.</div>
+    <div class="id-note">Please take a photo of (or upload) the front and back of your driver's licence. This is kept with your signed licence record only and used for identification and security deposit purposes.</div>
     <div class="id-row">
       <div class="id-slot">
         <label>Licence – Front</label>
@@ -264,9 +265,9 @@
   </details>
 
   <details class="clause" id="clause2">
-    <summary>2. Bond</summary>
+    <summary>2. Security Deposit</summary>
     <div class="clause-body">
-      <p>A bond of <b id="out-bond">[bond]</b> is payable prior to occupancy. The bond will be refunded within 7 days of check-out, less any amount reasonably deducted by the Licensor for damage, excess cleaning, missing items, or breach of this Licence.</p>
+      <p>A security deposit of <b id="out-bond">[security deposit]</b> is payable prior to occupancy. The security deposit will be refunded within 7 days of check-out, less any amount reasonably deducted by the Licensor for damage, excess cleaning, missing items, or breach of this Licence.</p>
     </div>
   </details>
 
@@ -377,6 +378,18 @@
   </div>
 
   <!-- Guest mode -->
+  <div id="bondHoldSection" style="display:none; font-family: Arial, sans-serif; background: #faf8f3; border: 1px solid #e2ddd0; border-radius: 6px; padding: 18px; margin-top: 20px;">
+    <h2 style="margin-top:0;">Security Deposit Hold</h2>
+    <div style="font-size: 13px; color: #666; margin-bottom: 14px;">
+      Your card will be <b>authorized</b> for the security deposit amount (<span id="bondHoldAmount">$0.00</span>) — this places a temporary hold, it does not charge you. The Licensor will release the hold after checkout if there's no damage, or claim against it if there is. Authorization holds also expire automatically after a few days if not actioned.
+    </div>
+    <div id="cardElement" style="padding: 10px; border: 1px solid #ccc; border-radius: 4px; background: #fff;"></div>
+    <div style="text-align:center; margin-top: 14px;">
+      <button id="authorizeBondBtn" style="background: #2b5540; color: #fff; border: none; padding: 12px 28px; font-size: 14px; border-radius: 6px; cursor: pointer;">Authorize Security Deposit Hold</button>
+    </div>
+    <div id="bondHoldStatus" style="text-align:center; margin-top: 10px; font-size: 13px;"></div>
+  </div>
+
   <div class="submit-bar" id="guestActions" style="display:none;">
     <button id="submitBtn">Sign &amp; Send</button>
   </div>
@@ -386,6 +399,11 @@
 
 <script>
 const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyC4GkZR3bs8Wj2zg8z2oBrsn2JBdoxE0Jcasp298k_QJ8kwzsjKh7mciabOJNSjSVV/exec';
+const STRIPE_PUBLISHABLE_KEY = 'pk_test_51U7YnNIvavyq88huIRT8msRXN1uw24KFEmki2dlJKqNFKLoIPGevYJXQ0wexTKXHFMTtQmFVNMaa2yxQuhRQ9Wgx00w6E3oX90';
+let stripe = null;
+let cardElement = null;
+let bondHoldConfirmed = false;
+let bondPaymentIntentId = null;
 const SIGNATURE_FILENAME = 'licensor-signature.png';
 const DEFAULT_RULES = `- No smoking or vaping inside.
 - No pets (service animals must provide certification).
@@ -407,10 +425,10 @@ bind('licensor', 'out-licensor', 'Kimberley Turner');
 bind('licenseeName', 'out-licensee', '[Guest Name]');
 bind('checkin', 'out-checkin', '[check-in]');
 bind('checkout', 'out-checkout', '[check-out]');
-bind('bond', 'out-bond', '[bond]');
+bind('bond', 'out-bond', '[security deposit]');
 
 document.getElementById('licensor').addEventListener('input', function () {
-  document.getElementById('licensorSigLabel').textContent = 'Licensor Signature (' + (this.value.trim() || 'Kim') + ')';
+  document.getElementById('licensorSigLabel').textContent = 'Licensor Signature (' + (this.value.trim() || 'Kimberley Turner') + ')';
 });
 document.getElementById('licenseeName').addEventListener('input', function () {
   document.getElementById('guestSigLabel').textContent = 'Licensee (Guest) Signature' + (this.value.trim() ? ' — ' + this.value.trim() : '');
@@ -605,7 +623,7 @@ if (hash.startsWith('#prefill=')) {
     fieldIds.forEach(id => document.getElementById(id).dispatchEvent(new Event('input')));
     const adminStatus = document.getElementById('adminStatus');
     adminStatus.style.color = '#2b5540';
-    adminStatus.textContent = 'Booking request details loaded — add the bond, confirm the rules, then sign and generate the guest link.';
+    adminStatus.textContent = 'Booking request details loaded — add the security deposit, confirm the rules, then sign and generate the guest link.';
   } catch (e) {
     console.error('Failed to parse prefill data', e);
   }
@@ -622,6 +640,20 @@ if (hash.startsWith('#data=')) {
     rulesBox.disabled = true;
     document.getElementById('rulesFieldWrap').style.display = 'none';
     document.getElementById('idUploadSection').style.display = 'block';
+    document.getElementById('bondHoldSection').style.display = 'block';
+    const depositValue = document.getElementById('bond').value.trim();
+    document.getElementById('bondHoldAmount').textContent = depositValue || '(not set)';
+    if (!depositValue || parseFloat(depositValue.replace(/[^0-9.]/g, '')) <= 0) {
+      // no valid deposit on this link — hide the hold step entirely rather than
+      // showing a broken $0.00 authorization the guest can't complete
+      document.getElementById('bondHoldSection').style.display = 'none';
+      bondHoldConfirmed = true; // nothing to authorize, so don't block signing
+    } else {
+      stripe = Stripe(STRIPE_PUBLISHABLE_KEY);
+      const elements = stripe.elements();
+      cardElement = elements.create('card');
+      cardElement.mount('#cardElement');
+    }
     document.getElementById('clause1').open = true;
     document.getElementById('clause2').open = true;
     document.getElementById('allClausesWrap').open = true;
@@ -757,6 +789,56 @@ async function loadHtml2Canvas() {
 }
 
 // ---------- guest: sign + send ----------
+document.getElementById('authorizeBondBtn').addEventListener('click', async () => {
+  const holdStatus = document.getElementById('bondHoldStatus');
+  const authorizeBtn = document.getElementById('authorizeBondBtn');
+  const bondValue = document.getElementById('bond').value;
+
+  if (bondHoldConfirmed) return;
+
+  authorizeBtn.disabled = true;
+  holdStatus.style.color = '#2b5540';
+  holdStatus.textContent = 'Creating hold...';
+
+  try {
+    const piForm = new FormData();
+    piForm.append('type', 'create-payment-intent');
+    piForm.append('amount', bondValue);
+    const piResp = await fetch(APPS_SCRIPT_URL, { method: 'POST', body: piForm });
+    const piResult = await piResp.json();
+
+    if (!piResult.success) {
+      holdStatus.style.color = '#a33';
+      holdStatus.textContent = 'Could not start security deposit hold: ' + (piResult.message || 'unknown error');
+      authorizeBtn.disabled = false;
+      return;
+    }
+
+    holdStatus.textContent = 'Confirming card details...';
+    const confirmResult = await stripe.confirmCardPayment(piResult.clientSecret, {
+      payment_method: { card: cardElement }
+    });
+
+    if (confirmResult.error) {
+      holdStatus.style.color = '#a33';
+      holdStatus.textContent = confirmResult.error.message + ' Please check your card details and try again.';
+      authorizeBtn.disabled = false;
+      return;
+    }
+
+    bondHoldConfirmed = true;
+    bondPaymentIntentId = piResult.paymentIntentId;
+    holdStatus.style.color = '#2b5540';
+    holdStatus.textContent = '✓ Security deposit hold authorized — you can now sign below.';
+    authorizeBtn.textContent = 'Security Deposit Hold Authorized';
+    cardElement.update({ disabled: true });
+  } catch (err) {
+    holdStatus.style.color = '#a33';
+    holdStatus.textContent = 'Error: ' + err.message;
+    authorizeBtn.disabled = false;
+  }
+});
+
 document.getElementById('submitBtn').addEventListener('click', async () => {
   const statusEl = document.getElementById('status');
   const submitBtn = document.getElementById('submitBtn');
@@ -788,6 +870,10 @@ document.getElementById('submitBtn').addEventListener('click', async () => {
   const idBackFile = idFiles.back;
   if (!idFrontFile || !idBackFile) {
     setStatus('Please add a photo of both the front and back of your licence.', '#a33');
+    return;
+  }
+  if (!bondHoldConfirmed) {
+    setStatus('Please authorize the security deposit hold above before signing.', '#a33');
     return;
   }
 
@@ -984,6 +1070,7 @@ document.getElementById('submitBtn').addEventListener('click', async () => {
     sendForm.append('checkin', document.getElementById('checkin').value);
     sendForm.append('checkout', document.getElementById('checkout').value);
     sendForm.append('bond', document.getElementById('bond').value);
+    sendForm.append('bondHoldRef', bondPaymentIntentId || '');
     sendForm.append('pdfBase64', pdfBase64);
 
     try {
