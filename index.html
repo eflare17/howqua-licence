@@ -651,7 +651,7 @@ if (hash.startsWith('#data=')) {
     } else {
       stripe = Stripe(STRIPE_PUBLISHABLE_KEY);
       const elements = stripe.elements();
-      cardElement = elements.create('card');
+      cardElement = elements.create('card', { hidePostalCode: true });
       cardElement.mount('#cardElement');
     }
     document.getElementById('clause1').open = true;
