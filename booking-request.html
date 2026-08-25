@@ -69,6 +69,7 @@
   .cal-day:hover:not(.cal-disabled):not(.cal-empty) { background: #eef4ef; }
   .cal-day.cal-empty { cursor: default; }
   .cal-day.cal-disabled { color: #ccc; cursor: not-allowed; }
+  .cal-day.cal-booked { color: #c88; background: #fdf2f2; text-decoration: line-through; }
   .cal-day.cal-selected-start, .cal-day.cal-selected-end {
     background: #2b5540; color: #fff; font-weight: bold;
   }
@@ -222,6 +223,18 @@
 const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyC4GkZR3bs8Wj2zg8z2oBrsn2JBdoxE0Jcasp298k_QJ8kwzsjKh7mciabOJNSjSVV/exec';
 const LICENCE_TOOL_URL = 'https://eflare17.github.io/howqua-licence/';
 
+// fetch already-booked dates so the calendar can grey them out
+let busyDates = new Set();
+fetch(APPS_SCRIPT_URL + '?action=get-busy-dates')
+  .then(r => r.json())
+  .then(result => {
+    if (result.success) {
+      busyDates = new Set(result.busyDates);
+      renderCalendar(); // re-render now that we know which dates are taken
+    }
+  })
+  .catch(() => {}); // if this fails, the calendar just shows all dates as available — not ideal, but not broken
+
 function b64EncodeUnicode(str) {
   return btoa(encodeURIComponent(str).replace(/%([0-9A-F]{2})/g, (m, p1) => String.fromCharCode('0x' + p1)));
 }
@@ -288,9 +301,15 @@ function renderCalendar() {
     const minNights = minNightsByType[document.getElementById('bookingType').value];
     const tooSoonForCheckout = rangeStart && !rangeEnd && d > rangeStart &&
       (d - rangeStart) / (1000 * 60 * 60 * 24) < minNights;
+    const dateKey = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+    const isBooked = busyDates.has(dateKey);
 
-    if (d < today || tooSoonForCheckout) {
+    if (d < today || tooSoonForCheckout || isBooked) {
       cell.classList.add('cal-disabled');
+      if (isBooked) {
+        cell.classList.add('cal-booked');
+        cell.title = 'Already booked';
+      }
     } else {
       if (sameDay(d, rangeStart)) cell.classList.add('cal-selected-start');
       if (sameDay(d, rangeEnd)) cell.classList.add('cal-selected-end');

@@ -121,6 +121,9 @@ document.getElementById('authorizeBondBtn').addEventListener('click', async () =
     form.append('amount', bookingData.bond || '0');
     form.append('successUrl', successUrl);
     form.append('cancelUrl', cancelUrl);
+    form.append('licenseeName', bookingData.licenseeName || '');
+    form.append('checkin', bookingData.checkin || '');
+    form.append('checkout', bookingData.checkout || '');
     const resp = await fetch(APPS_SCRIPT_URL, { method: 'POST', body: form });
     const result = await resp.json();
 
