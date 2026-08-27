@@ -169,6 +169,7 @@
       <div class="field">
         <label>Licensee (Guest) Full Name</label>
         <input type="text" id="licenseeName" placeholder="Guest full name">
+        <div style="font-size:11px; color:#888; margin-top:3px;">Must match the name on their driver's licence</div>
       </div>
     </div>
     <div class="field-row">
@@ -211,7 +212,8 @@
 - No trespassing or parking on private properties.
 - Quiet hours 10:00pm–8:00am.
 - Maximum of 4 occupants on the property at any time.
-- Outdoor fires only in designated fire pit.</textarea>
+- Outdoor fires only in designated fire pit.
+- No shoes to be worn inside.</textarea>
     </details>
   </div>
 
@@ -393,7 +395,8 @@ const DEFAULT_RULES = `- No smoking or vaping inside.
 - No trespassing or parking on private properties.
 - Quiet hours 10:00pm–8:00am.
 - Maximum of 4 occupants on the property at any time.
-- Outdoor fires only in designated fire pit.`;
+- Outdoor fires only in designated fire pit.
+- No shoes to be worn inside.`;
 const fieldIds = ['licensor','licenseeName','licenseePhone','licenseeEmail','occupants','checkin','checkout','bond'];
 
 const bind = (id, outId, fallback) => {
