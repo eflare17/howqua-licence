@@ -82,6 +82,11 @@
   .sig-controls button { background: none; border: none; color: #a33; font-size: 12px; cursor: pointer; text-decoration: underline; }
   .signed-caption { font-family: Arial, sans-serif; font-size: 12px; color: #555; margin-top: 4px; }
   .submit-bar { margin-top: 30px; text-align: center; }
+  #verifyNotice {
+    font-family: Arial, sans-serif; font-size: 13px; color: #555; background: #f4f2ea;
+    border: 1px solid #e2ddd0; border-radius: 6px; padding: 10px 14px; margin-bottom: 14px;
+    display: inline-block;
+  }
   #submitBtn {
     background: #2b5540; color: #fff; border: none; padding: 14px 34px; font-size: 16px;
     border-radius: 6px; cursor: pointer; font-family: Arial, sans-serif;
@@ -314,6 +319,7 @@
 
   <!-- Guest mode -->
   <div class="submit-bar" id="guestActions" style="display:none;">
+    <div id="verifyNotice">After signing, you'll be taken to Didit, a secure identity verification service, to scan your driver's licence.</div>
     <button id="submitBtn">Sign &amp; Send</button>
   </div>
   <div id="status"></div>
@@ -669,7 +675,6 @@ document.getElementById('submitBtn').addEventListener('click', async () => {
     statusEl.classList.toggle('status-error', isError);
     statusEl.innerHTML = (isWorking ? '<span class="status-spinner"></span>' : '') +
       '<span>' + text.replace(/&/g, '&amp;').replace(/</g, '&lt;') + '</span>';
-    statusEl.scrollIntoView({ behavior: 'auto', block: 'center' });
   }
 
   const licenseeName = document.getElementById('licenseeName').value.trim() || 'Guest';
