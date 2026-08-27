@@ -89,6 +89,18 @@
   #submitBtn:hover { background: #1e3e2e; }
   #submitBtn:disabled { background: #999; cursor: default; }
   #status, #adminStatus { text-align: center; margin-top: 12px; font-family: Arial, sans-serif; font-size: 13px; color: #2b5540; }
+  #status.status-active {
+    font-size: 17px; font-weight: bold; padding: 16px 20px; background: #eef4ef;
+    border: 1.5px solid #bcd9c3; border-radius: 8px; display: flex; align-items: center;
+    justify-content: center; gap: 10px;
+  }
+  #status.status-active.status-error { background: #fbeaea; border-color: #e4b3b3; }
+  .status-spinner {
+    width: 18px; height: 18px; border: 3px solid rgba(43,85,64,0.25); border-top-color: #2b5540;
+    border-radius: 50%; animation: statusSpin 0.8s linear infinite; flex-shrink: 0;
+  }
+  .status-error .status-spinner { border-color: rgba(163,51,51,0.25); border-top-color: #a33; }
+  @keyframes statusSpin { to { transform: rotate(360deg); } }
   details.clause { margin-top: 10px; }
   #allClausesWrap > details.clause:first-of-type { margin-top: 18px; }
   details.clause summary {
@@ -646,10 +658,17 @@ document.getElementById('submitBtn').addEventListener('click', async () => {
   if (submitBtn.disabled) return; // already submitting or already sent — ignore a stray second click
 
   // keeps the status message visible even as sections above it collapse/hide during processing,
-  // which otherwise shifts the page layout and leaves the message scrolled out of view
+  // which otherwise shifts the page layout and leaves the message scrolled out of view.
+  // Any message ending in "..." is treated as "still working" and gets a bigger, boxed
+  // look with a spinner, so it's obvious the page hasn't frozen — final messages (success
+  // or error, not ending in "...") drop the spinner but keep the same prominent styling.
   function setStatus(text, color) {
-    statusEl.style.color = color || '#2b5540';
-    statusEl.textContent = text;
+    const isError = color === '#a33';
+    const isWorking = text.trim().endsWith('...');
+    statusEl.classList.add('status-active');
+    statusEl.classList.toggle('status-error', isError);
+    statusEl.innerHTML = (isWorking ? '<span class="status-spinner"></span>' : '') +
+      '<span>' + text.replace(/&/g, '&amp;').replace(/</g, '&lt;') + '</span>';
     statusEl.scrollIntoView({ behavior: 'auto', block: 'center' });
   }
 
