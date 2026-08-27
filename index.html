@@ -724,7 +724,7 @@ document.getElementById('genLinkBtn').addEventListener('click', () => {
   if (rulesBox.value.trim() !== DEFAULT_RULES.trim()) {
     data.rules = rulesBox.value;
   }
-  data.licensorSignedDate = new Date().toLocaleDateString('en-AU');
+  data.licensorSignedDate = new Date().toLocaleString('en-AU');
 
   const json = JSON.stringify(data);
   const encoded = encodeURIComponent(b64EncodeUnicode(json));
@@ -804,7 +804,7 @@ document.getElementById('submitBtn').addEventListener('click', async () => {
 
   const caption = document.createElement('div');
   caption.className = 'signed-caption';
-  caption.textContent = 'Signed by ' + licenseeName + ' on ' + new Date().toLocaleDateString('en-AU');
+  caption.textContent = 'Signed by ' + licenseeName + ' on ' + new Date().toLocaleString('en-AU');
   document.getElementById('sigPadGuest').insertAdjacentElement('afterend', caption);
 
   function letterboxImage(dataUrl, boxWidth, boxHeight) {
@@ -1007,7 +1007,34 @@ document.getElementById('submitBtn').addEventListener('click', async () => {
       const result = await resp.json();
       if (result.success) {
         setStatus('Signed! Your copy has downloaded, been emailed to the property owner' +
-          (guestEmail ? (result.guestSent ? ', and sent to your email.' : ' — sending your email copy failed, but you have the download.') : '.'));
+          (guestEmail ? (result.guestSent ? ', and sent to your email.' : ' — sending your email copy failed, but you have the download.') : '.') +
+          ' Setting up identity verification...');
+
+        // create a Didit verification session tied to this booking, then send the
+        // guest straight there — this is what lets the result come back linked
+        // to the right guest automatically, instead of a generic unlinked link
+        try {
+          const diditForm = new FormData();
+          diditForm.append('type', 'create-didit-session');
+          diditForm.append('licenseeName', licenseeName);
+          diditForm.append('licenseeEmail', guestEmail);
+          diditForm.append('checkin', document.getElementById('checkin').value);
+          diditForm.append('checkout', document.getElementById('checkout').value);
+          const diditResp = await fetch(APPS_SCRIPT_URL, { method: 'POST', body: diditForm });
+          const diditResult = await diditResp.json();
+          if (diditResult.success && diditResult.sessionUrl) {
+            setStatus('Signed! Taking you to identity verification now...');
+            setTimeout(() => {
+              window.location.href = diditResult.sessionUrl;
+            }, 1500);
+          } else {
+            setStatus('Signed and sent! Identity verification could not be started automatically (' +
+              (diditResult.message || 'unknown error') + ') — the owner will follow up with a verification link separately.');
+          }
+        } catch (diditErr) {
+          setStatus('Signed and sent! Identity verification could not be started automatically (' +
+            diditErr.message + ') — the owner will follow up with a verification link separately.');
+        }
       } else {
         setStatus('PDF saved, but the email failed (' + (result.message || 'unknown error') + '). Please contact the owner directly.', '#a33');
       }
