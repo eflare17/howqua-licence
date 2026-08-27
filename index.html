@@ -843,12 +843,10 @@ document.getElementById('submitBtn').addEventListener('click', async () => {
 
     if (pdfSizeMB > 4.5) {
       setStatus('Your copy has downloaded, but the signed PDF is too large (' + pdfSizeMB.toFixed(1) + 'MB) to email automatically. Please send the downloaded file to the owner directly.', '#a33');
-      pdf.save(filename);
+      pdf.save(filename); // only case where we still force a download — there's no other way to get them the file
       submitBtn.disabled = false;
       return;
     }
-
-    pdf.save(filename);
 
     const guestEmail = document.getElementById('licenseeEmail').value.trim();
     const guestPhone = document.getElementById('licenseePhone').value.trim();
@@ -890,8 +888,8 @@ document.getElementById('submitBtn').addEventListener('click', async () => {
       const resp = await fetch(APPS_SCRIPT_URL, { method: 'POST', body: sendForm });
       const result = await resp.json();
       if (result.success) {
-        setStatus('Signed! Your copy has downloaded, been emailed to the property owner' +
-          (guestEmail ? (result.guestSent ? ', and sent to your email.' : ' — sending your email copy failed, but you have the download.') : '.') +
+        setStatus('Signed! Your copy has been emailed to the property owner' +
+          (guestEmail ? (result.guestSent ? ' and sent to your email.' : ' — sending your email copy failed, but the owner has your signed copy.') : '.') +
           ' Setting up identity verification...');
 
         // create a Didit verification session tied to this booking, then send the
@@ -920,10 +918,10 @@ document.getElementById('submitBtn').addEventListener('click', async () => {
             diditErr.message + ') — the owner will follow up with a verification link separately.');
         }
       } else {
-        setStatus('PDF saved, but the email failed (' + (result.message || 'unknown error') + '). Please contact the owner directly.', '#a33');
+        setStatus('Your details were signed, but the email failed (' + (result.message || 'unknown error') + '). Please contact the owner directly.', '#a33');
       }
     } catch (err) {
-      setStatus('PDF saved, but sending the email failed (' + err.message + '). Please contact the owner directly.', '#a33');
+      setStatus('Your details were signed, but sending the email failed (' + err.message + '). Please contact the owner directly.', '#a33');
     }
   } catch (err) {
     setStatus('Error: ' + err.message, '#a33');
