@@ -107,48 +107,7 @@
     font-family: Arial, sans-serif; font-size: 12.5px; background: #eef4ef; border: 1px solid #cde0d1;
     border-radius: 6px; padding: 10px; margin-top: 10px; word-break: break-all; display: none;
   }
-  #idUploadSection {
-    font-family: Arial, sans-serif; background: #faf8f3; border: 1px solid #e2ddd0;
-    border-radius: 6px; padding: 18px; margin-top: 20px; display: none;
-  }
-  #idUploadSection h2 { margin-top: 0; }
-  .id-note { font-size: 12px; color: #666; margin-bottom: 14px; }
-  .id-row { display: flex; gap: 16px; flex-wrap: wrap; }
-  .id-slot { flex: 1; min-width: 220px; }
-  .id-slot label { display: block; font-size: 12px; color: #555; margin-bottom: 4px; font-weight: bold; }
-  .id-slot input[type="file"] { display: none; }
-  .id-btn-row { display: flex; gap: 8px; }
-  .id-btn {
-    flex: 1; padding: 8px; border: 1px solid #ccc; border-radius: 4px; font-size: 12.5px;
-    background: #fff; cursor: pointer; text-align: center; font-family: Arial, sans-serif;
-  }
-  .id-btn:hover { background: #f0efe9; }
-  .id-preview {
-    margin-top: 8px; width: 100%; max-height: 140px; object-fit: contain; border: 1px solid #ddd;
-    border-radius: 4px; background: #fff; display: none;
-  }
-  .id-slot-wrap { position: relative; }
-  .id-preview-wrap { position: relative; display: none; margin-top: 8px; }
-  .id-preview-wrap.filled { display: block; }
-  .id-preview-wrap img {
-    width: 100%; max-height: 150px; object-fit: contain; border: 1.5px solid #bcd9c3;
-    border-radius: 6px; background: #fff; box-shadow: 0 1px 4px rgba(0,0,0,0.08); display: block;
-  }
-  .id-check {
-    position: absolute; top: 6px; right: 6px; background: #2b5540; color: #fff;
-    width: 22px; height: 22px; border-radius: 50%; display: flex; align-items: center;
-    justify-content: center; font-size: 13px; font-family: Arial, sans-serif; box-shadow: 0 1px 3px rgba(0,0,0,0.25);
-  }
-  .id-remove {
-    position: absolute; top: 6px; left: 6px; background: rgba(0,0,0,0.55); color: #fff;
-    width: 22px; height: 22px; border-radius: 50%; display: flex; align-items: center;
-    justify-content: center; font-size: 13px; font-family: Arial, sans-serif; cursor: pointer;
-    border: none; box-shadow: 0 1px 3px rgba(0,0,0,0.25);
-  }
-  .id-remove:hover { background: rgba(163,51,51,0.85); }
-  .id-filename {
-    display: none;
-  }
+
 </style>
 </head>
 <body>
@@ -204,7 +163,7 @@
         <input type="text" id="bond" value="$300.00">
       </div>
     </div>
-    <details class="field" id="rulesFieldWrap">
+  <details class="field" id="rulesFieldWrap">
       <summary style="cursor:pointer; font-size:12px; color:#555; font-weight:bold; font-family: Arial, sans-serif;">House Rules (click to edit — shown in Clause 1 below)</summary>
       <textarea id="rulesBox" style="margin-top:8px;">- No smoking or vaping inside.
 - No pets (service animals must provide certification).
@@ -215,43 +174,6 @@
 - Outdoor fires only in designated fire pit.
 - No shoes to be worn inside.</textarea>
     </details>
-  </div>
-
-  <div id="idUploadSection">
-    <h2>Photo ID</h2>
-    <div class="id-note">Please take a photo of (or upload) the front and back of your driver's licence. This is kept with your signed licence record only and used for identification and security deposit purposes.</div>
-    <div class="id-row">
-      <div class="id-slot">
-        <label>Licence – Front</label>
-        <div class="id-btn-row">
-          <div class="id-btn" id="idFrontCameraBtn">📷 Take Photo</div>
-          <div class="id-btn" id="idFrontFileBtn">🖼 Choose File</div>
-        </div>
-        <input type="file" id="idFront" accept="image/*">
-        <input type="file" id="idFrontCam" accept="image/*" capture="environment">
-        <div class="id-preview-wrap" id="idFrontPreviewWrap">
-          <img id="idFrontPreview">
-          <div class="id-check">✓</div>
-          <button type="button" class="id-remove" id="idFrontRemoveBtn">✕</button>
-        </div>
-        <div class="id-filename" id="idFrontFilename"></div>
-      </div>
-      <div class="id-slot">
-        <label>Licence – Back</label>
-        <div class="id-btn-row">
-          <div class="id-btn" id="idBackCameraBtn">📷 Take Photo</div>
-          <div class="id-btn" id="idBackFileBtn">🖼 Choose File</div>
-        </div>
-        <input type="file" id="idBack" accept="image/*">
-        <input type="file" id="idBackCam" accept="image/*" capture="environment">
-        <div class="id-preview-wrap" id="idBackPreviewWrap">
-          <img id="idBackPreview">
-          <div class="id-check">✓</div>
-          <button type="button" class="id-remove" id="idBackRemoveBtn">✕</button>
-        </div>
-        <div class="id-filename" id="idBackFilename"></div>
-      </div>
-    </div>
   </div>
 
   <details id="allClausesWrap">
@@ -504,48 +426,7 @@ function makeSigPad(canvas, maxDim) {
   };
 }
 
-// ---------- ID photo previews + resize ----------
-const idFiles = { front: null, back: null };
-
-function wireIdSlot(slotKey, camBtnId, fileBtnId, camInputId, fileInputId, previewId) {
-  const camBtn = document.getElementById(camBtnId);
-  const fileBtn = document.getElementById(fileBtnId);
-  const camInput = document.getElementById(camInputId);
-  const fileInput = document.getElementById(fileInputId);
-  const preview = document.getElementById(previewId);
-  const previewWrap = document.getElementById(previewId + 'Wrap');
-  const filenameEl = document.getElementById(previewId.replace('Preview', '') + 'Filename');
-  const removeBtn = document.getElementById(previewId.replace('Preview', '') + 'RemoveBtn');
-
-  camBtn.addEventListener('click', () => camInput.click());
-  fileBtn.addEventListener('click', () => fileInput.click());
-
-  const handleFile = (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    idFiles[slotKey] = file;
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-      preview.src = ev.target.result;
-      previewWrap.classList.add('filled');
-      filenameEl.textContent = file.name;
-    };
-    reader.readAsDataURL(file);
-  };
-  camInput.addEventListener('change', handleFile);
-  fileInput.addEventListener('change', handleFile);
-
-  removeBtn.addEventListener('click', () => {
-    idFiles[slotKey] = null;
-    preview.src = '';
-    previewWrap.classList.remove('filled');
-    filenameEl.textContent = '';
-    camInput.value = '';
-    fileInput.value = '';
-  });
-}
-wireIdSlot('front', 'idFrontCameraBtn', 'idFrontFileBtn', 'idFrontCam', 'idFront', 'idFrontPreview');
-wireIdSlot('back', 'idBackCameraBtn', 'idBackFileBtn', 'idBackCam', 'idBack', 'idBackPreview');
+// ---------- ID photo previews + resize (kept for other resize uses) ----------
 
 function resizeImageFile(file, maxWidth) {
   return new Promise((resolve, reject) => {
@@ -624,7 +505,6 @@ if (hash.startsWith('#data=')) {
     fieldIds.forEach(id => document.getElementById(id).disabled = true);
     rulesBox.disabled = true;
     document.getElementById('rulesFieldWrap').style.display = 'none';
-    document.getElementById('idUploadSection').style.display = 'block';
     document.getElementById('clause1').open = true;
     document.getElementById('clause2').open = true;
     document.getElementById('allClausesWrap').open = true;
@@ -787,12 +667,6 @@ document.getElementById('submitBtn').addEventListener('click', async () => {
     setStatus('Please sign in the signature box before submitting.', '#a33');
     return;
   }
-  const idFrontFile = idFiles.front;
-  const idBackFile = idFiles.back;
-  if (!idFrontFile || !idBackFile) {
-    setStatus('Please add a photo of both the front and back of your licence.', '#a33');
-    return;
-  }
 
   submitBtn.disabled = true; // disable immediately, before any further work, to block a rapid second click
   setStatus('Preparing your signed document...');
@@ -829,9 +703,9 @@ document.getElementById('submitBtn').addEventListener('click', async () => {
     });
   }
 
-  // html2canvas doesn't respect object-fit: contain, so pre-bake the ID preview
-  // thumbnails to their exact on-screen box before capturing, avoiding a squish
-  for (const previewId of ['idFrontPreview', 'idBackPreview', 'licensorSigImg']) {
+  // html2canvas doesn't respect object-fit: contain, so pre-bake the signature
+  // thumbnail to its exact on-screen box before capturing, avoiding a squish
+  for (const previewId of ['licensorSigImg']) {
     const previewImg = document.getElementById(previewId);
     if (previewImg && previewImg.src) {
       const rect = previewImg.getBoundingClientRect();
@@ -938,20 +812,6 @@ document.getElementById('submitBtn').addEventListener('click', async () => {
       }
       placeBlock(block);
     });
-
-    // add licence photo pages
-    setStatus('Attaching ID photos...');
-    const idFrontResized = await resizeImageFile(idFrontFile, 1400);
-    const idBackResized = await resizeImageFile(idBackFile, 1400);
-    for (const [label, resized] of [['Licence – Front', idFrontResized], ['Licence – Back', idBackResized]]) {
-      pdf.addPage();
-      pdf.setFontSize(12);
-      pdf.text(label, 20, 30);
-      const w = pageWidth - 40;
-      const h = (resized.height * w) / resized.width;
-      const y = Math.max(40, (pageHeight - h) / 2);
-      pdf.addImage(resized.dataUrl, 'JPEG', 20, 40, w, Math.min(h, pageHeight - 60));
-    }
 
     const filename = 'Licence-to-Occupy-' + licenseeName.replace(/\s+/g, '-') + '.pdf';
     const pdfBlob = pdf.output('blob');
