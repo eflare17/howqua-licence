@@ -130,6 +130,20 @@
       </div>
     </div>
     <div class="field-row">
+      <div class="field">
+        <label>Number of Guests (max 4)</label>
+        <input type="number" id="occupants" max="4" min="1" value="2">
+      </div>
+      <div class="field">
+        <label>Booking Type</label>
+        <select id="bookingType">
+          <option value="minimoon">Mini-Moon Package (min 3 nights)</option>
+          <option value="anniversary">Anniversary Package (min 2 nights)</option>
+          <option value="standard">Standard Stay (min 2 nights)</option>
+        </select>
+      </div>
+    </div>
+    <div class="field-row">
       <div class="field" style="width:100%;">
         <label>Select your stay (click check-in date, then click check-out date)</label>
         <div id="rangeCalendar" class="range-calendar">
@@ -144,20 +158,6 @@
           <div id="calGrid" class="cal-grid"></div>
         </div>
         <div id="rangeSummary" class="range-summary">No dates selected yet</div>
-      </div>
-    </div>
-    <div class="field-row">
-      <div class="field">
-        <label>Number of Guests (max 4)</label>
-        <input type="number" id="occupants" max="4" min="1" value="2">
-      </div>
-      <div class="field">
-        <label>Booking Type</label>
-        <select id="bookingType">
-          <option value="minimoon">Mini-Moon Package (min 3 nights)</option>
-          <option value="anniversary">Anniversary Package (min 2 nights)</option>
-          <option value="standard">Standard Stay (min 2 nights)</option>
-        </select>
       </div>
     </div>
     <div class="field-row">
