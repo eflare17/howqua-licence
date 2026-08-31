@@ -114,11 +114,15 @@
   <div id="formWrap">
     <div class="field-row">
       <div class="field">
-        <label>Full Name</label>
-        <input type="text" id="licenseeName" placeholder="Your full name">
-        <div style="font-size:11px; color:#888; margin-top:3px;">Must match the name on your driver's licence</div>
+        <label>First Name</label>
+        <input type="text" id="licenseeFirstName" placeholder="Your first name">
+      </div>
+      <div class="field">
+        <label>Last Name</label>
+        <input type="text" id="licenseeLastName" placeholder="Your last name">
       </div>
     </div>
+    <div style="font-size:11px; color:#888; margin-top:-8px; margin-bottom:12px;">Your name must match the name on your driver's licence</div>
     <div class="field-row">
       <div class="field">
         <label>Phone</label>
@@ -399,7 +403,9 @@ document.getElementById('submitBtn').addEventListener('click', async () => {
   const statusEl = document.getElementById('status');
   const submitBtn = document.getElementById('submitBtn');
 
-  const name = document.getElementById('licenseeName').value.trim();
+  const firstName = document.getElementById('licenseeFirstName').value.trim();
+  const lastName = document.getElementById('licenseeLastName').value.trim();
+  const name = (firstName + ' ' + lastName).trim();
   const phone = document.getElementById('licenseePhone').value.trim();
   const email = document.getElementById('licenseeEmail').value.trim();
   const checkin = rangeStart ? formatNice(rangeStart) : '';
@@ -437,6 +443,8 @@ document.getElementById('submitBtn').addEventListener('click', async () => {
   // build a pre-fill link for Kim/Tyson to open the Licence to Occupy tool with these details already in
   const prefillData = {
     licenseeName: name,
+    licenseeFirstName: firstName,
+    licenseeLastName: lastName,
     licenseePhone: phone,
     licenseeEmail: email,
     occupants: occupants,
@@ -449,6 +457,8 @@ document.getElementById('submitBtn').addEventListener('click', async () => {
   const formData = new FormData();
   formData.append('type', 'booking');
   formData.append('licenseeName', name);
+  formData.append('licenseeFirstName', firstName);
+  formData.append('licenseeLastName', lastName);
   formData.append('licenseePhone', phone);
   formData.append('licenseeEmail', email);
   formData.append('checkin', checkin);
