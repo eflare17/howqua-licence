@@ -39,7 +39,7 @@
   <ul>
     <li>Drive to the left side of the cabin near the handrail.</li>
     <li>The lockbox hangs on the right as you reach the top of the handrail.</li>
-    <li>Slide the cover down, enter <b>2306</b>, and pull the toggle down to release the front door key.</li>
+    <li>Slide the cover down, enter <b id="lockboxCode">the code from your booking confirmation</b>, and pull the toggle down to release the front door key.</li>
     <li><i>(Note: The rear door can only be locked/unlocked from the outside.)</i></li>
   </ul>
   <h2>Settling In</h2>
@@ -49,6 +49,11 @@
   </ul>
 </div>
 <script>
+// The lockbox code is passed privately in the link from the booking page (#code=...)
+(function () {
+  var m = location.hash.match(/code=(\w+)/);
+  if (m) document.getElementById('lockboxCode').textContent = m[1];
+})();
 document.getElementById('printBtn').addEventListener('click', function () { window.print(); });
 document.getElementById('downloadBtn').addEventListener('click', function () {
   var btn = document.getElementById('downloadBtn');
