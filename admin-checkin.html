@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Check-In Admin — Howqua Hideaway</title>
+<style>
+  body { font-family: Georgia, 'Times New Roman', serif; background: #f4f1ea; margin: 0; padding: 20px; color: #2b2b2b; }
+  .sheet { max-width: 800px; margin: 0 auto; background: #fff; padding: 36px 32px; border-radius: 6px; box-shadow: 0 2px 12px rgba(0,0,0,0.12); }
+  h1 { text-align: center; font-size: 24px; letter-spacing: 1px; margin: 0 0 4px; }
+  .subtitle { text-align: center; color: #666; font-size: 13px; margin-bottom: 24px; font-family: Arial, sans-serif; }
+  h2 { font-size: 17px; color: #2b5540; letter-spacing: 0.5px; margin: 24px 0 8px; }
+  label { display: block; font-size: 12px; color: #555; margin: 12px 0 4px; font-weight: bold; font-family: Arial, sans-serif; }
+  input, textarea { width: 100%; padding: 8px 10px; border: 1px solid #ccc; border-radius: 4px; font-size: 14px; font-family: Arial, sans-serif; box-sizing: border-box; }
+  textarea { min-height: 90px; line-height: 1.5; }
+  .hint { font-size: 11px; color: #888; font-family: Arial, sans-serif; margin-top: 3px; }
+  .btn { background: #2b5540; color: #fff; border: none; border-radius: 4px; padding: 10px 18px; font-size: 14px; font-family: Arial, sans-serif; cursor: pointer; margin-top: 14px; }
+  .btn.small { padding: 6px 12px; font-size: 12px; margin: 0; }
+  .btn:disabled { opacity: 0.6; }
+  #status { font-family: Arial, sans-serif; font-size: 13px; margin-top: 10px; min-height: 18px; }
+  table { width: 100%; border-collapse: collapse; font-family: Arial, sans-serif; font-size: 13px; }
+  th, td { text-align: left; padding: 8px 6px; border-bottom: 1px solid #eee; vertical-align: middle; }
+  th { color: #555; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; }
+  .sent-yes { color: #2b5540; font-weight: bold; }
+  .sent-no { color: #a33; }
+  #adminPanel { display: none; }
+</style>
+</head>
+<body>
+<div class="sheet">
+  <h1>CHECK-IN ADMIN</h1>
+  <div class="subtitle">Howqua Hideaway — edit the guest check-in instructions &amp; send check-in emails</div>
+
+  <div id="loginPanel">
+    <label>Admin password</label>
+    <input type="password" id="password" autocomplete="current-password">
+    <button class="btn" id="loginBtn" type="button">Sign in</button>
+  </div>
+
+  <div id="adminPanel">
+    <h2>Upcoming bookings</h2>
+    <div class="hint">Bookings come from the calendar (added automatically when a licence is signed). "Send now" emails the guest their check-in instructions immediately.</div>
+    <table>
+      <thead><tr><th>Guest</th><th>Check-in</th><th>Email</th><th>Check-in email</th><th></th></tr></thead>
+      <tbody id="bookingRows"><tr><td colspan="5">Loading…</td></tr></tbody>
+    </table>
+
+    <h2>Check-in instructions</h2>
+    <div class="hint">These feed both the guest page and the check-in emails. One line per bullet point. Use [CODE] wherever the lockbox code should appear — the real code is only ever shown in emails and links sent to guests.</div>
+    <label>Warning banner</label>
+    <input id="f_warning">
+    <label>Google Maps link</label>
+    <input id="f_mapsUrl">
+    <label>Directions (one step per line)</label>
+    <textarea id="f_directions"></textarea>
+    <label>Access / getting in (one step per line, use [CODE] for the lockbox code)</label>
+    <textarea id="f_access"></textarea>
+    <label>Settling in (one point per line)</label>
+    <textarea id="f_settling"></textarea>
+    <label>Lockbox code</label>
+    <input id="f_lockboxCode" style="max-width:140px;">
+    <label>Contact phone shown in emails (optional)</label>
+    <input id="f_contactPhone" style="max-width:240px;">
+    <button class="btn" id="saveBtn" type="button">Save instructions</button>
+  </div>
+  <div id="status"></div>
+</div>
+
+<script>
+var SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyC4GkZR3bs8Wj2zg8z2oBrsn2JBdoxE0Jcasp298k_QJ8kwzsjKh7mciabOJNSjSVV/exec';
+var password = '';
+function setStatus(msg, ok) {
+  var el = document.getElementById('status');
+  el.textContent = msg;
+  el.style.color = ok ? '#2b5540' : '#a33';
+}
+function api(fields) {
+  var body = new URLSearchParams();
+  body.append('type', 'checkin-admin');
+  body.append('password', password);
+  Object.keys(fields).forEach(function (k) { body.append(k, fields[k]); });
+  return fetch(SCRIPT_URL, { method: 'POST', body: body }).then(function (r) { return r.json(); });
+}
+var FIELD_IDS = ['warning', 'mapsUrl', 'directions', 'access', 'settling', 'lockboxCode', 'contactPhone'];
+function renderBookings(bookings) {
+  var tbody = document.getElementById('bookingRows');
+  if (!bookings.length) { tbody.innerHTML = '<tr><td colspan="5">No upcoming bookings in the next 90 days.</td></tr>'; return; }
+  tbody.innerHTML = '';
+  bookings.forEach(function (b) {
+    var tr = document.createElement('tr');
+    tr.innerHTML = '<td>' + b.guestName + '</td><td>' + b.checkin + '</td><td>' + (b.guestEmail || '—') + '</td>' +
+      '<td class="' + (b.sent ? 'sent-yes' : 'sent-no') + '">' + (b.sent ? 'Sent ✓' : 'Not sent') + '</td><td></td>';
+    var btn = document.createElement('button');
+    btn.className = 'btn small'; btn.type = 'button';
+    btn.textContent = b.sent ? 'Send again' : 'Send now';
+    btn.addEventListener('click', function () {
+      if (!confirm('Email the check-in instructions to ' + b.guestName + (b.guestEmail ? ' (' + b.guestEmail + ')' : '') + '?')) return;
+      btn.disabled = true;
+      api({ sub: 'send', eventId: b.id }).then(function (res) {
+        setStatus(res.message, res.success);
+        btn.disabled = false;
+        if (res.success) load();
+      });
+    });
+    tr.lastChild.appendChild(btn);
+    tbody.appendChild(tr);
+  });
+}
+function load() {
+  api({ sub: 'get' }).then(function (res) {
+    if (!res.success) { setStatus(res.message || 'Could not load.', false); return; }
+    document.getElementById('loginPanel').style.display = 'none';
+    document.getElementById('adminPanel').style.display = 'block';
+    FIELD_IDS.forEach(function (k) { document.getElementById('f_' + k).value = res.content[k] || ''; });
+    renderBookings(res.bookings || []);
+    setStatus('', true);
+  }).catch(function () { setStatus('Could not reach the backend.', false); });
+}
+document.getElementById('loginBtn').addEventListener('click', function () {
+  password = document.getElementById('password').value;
+  setStatus('Checking…', true);
+  load();
+});
+document.getElementById('password').addEventListener('keydown', function (e) { if (e.key === 'Enter') document.getElementById('loginBtn').click(); });
+document.getElementById('saveBtn').addEventListener('click', function () {
+  var content = {};
+  FIELD_IDS.forEach(function (k) { content[k] = document.getElementById('f_' + k).value; });
+  setStatus('Saving…', true);
+  api({ sub: 'save', content: JSON.stringify(content) }).then(function (res) {
+    setStatus(res.success ? 'Saved — the guest page and emails now use the new wording.' : res.message, res.success);
+  });
+});
+</script>
+</body>
+</html>
