@@ -143,11 +143,16 @@
         <input type="text" id="licensor" value="Kimberley Turner">
       </div>
       <div class="field">
-        <label>Licensee (Guest) Full Name</label>
-        <input type="text" id="licenseeName" placeholder="Guest full name">
-        <div style="font-size:11px; color:#888; margin-top:3px;">Must match the name on their driver's licence</div>
+        <label>Licensee (Guest) First Name</label>
+        <input type="text" id="licenseeFirstName" placeholder="Guest first name">
       </div>
+      <div class="field">
+        <label>Licensee (Guest) Last Name</label>
+        <input type="text" id="licenseeLastName" placeholder="Guest last name">
+      </div>
+      <input type="hidden" id="licenseeName">
     </div>
+    <div style="font-size:11px; color:#888; margin-top:-8px; margin-bottom:12px;">Name must match the name on their driver's licence</div>
     <div class="field-row">
       <div class="field">
         <label>Licensee Phone</label>
@@ -176,7 +181,7 @@
     </div>
     <div class="field-row">
       <div class="field">
-        <label>Security Deposit (AUD)</label>
+        <label>Incidental Security Hold (AUD)</label>
         <input type="text" id="bond" value="$300.00">
       </div>
     </div>
@@ -205,9 +210,9 @@
   </details>
 
   <details class="clause" id="clause2">
-    <summary>2. Security Deposit</summary>
+    <summary>2. Incidental Security Hold</summary>
     <div class="clause-body">
-      <p>A security deposit of <b id="out-bond">[security deposit]</b> is payable prior to occupancy. The security deposit will be refunded within 7 days of check-out, less any amount reasonably deducted by the Licensor for damage, excess cleaning, missing items, or breach of this Licence.</p>
+      <p>An incidental security hold of <b id="out-bond">[incidental security hold]</b> is placed on the Licensee's card via Stripe gateway payments prior to occupancy. No funds are charged unless a claim is made. The hold is released within 7 days of check-out, less any amount reasonably deducted by the Licensor for damage, excess cleaning, missing items, or breach of this Licence.</p>
     </div>
   </details>
 
@@ -245,7 +250,7 @@
       <p>The Licensee agrees to:</p>
       <ul>
         <li>Abide by the house rules set out in this Licence;</li>
-        <li>Take reasonable care of the Property, its fixtures, fittings and contents;</li>
+        <li>Take care of the Property, its fixtures, fittings and contents;</li>
         <li>Report any damage or malfunction to the Licensor as soon as practicable;</li>
         <li>Not sublet, assign, or share access to the Property with persons outside the agreed occupancy;</li>
         <li>Leave the Property in a clean and tidy condition, consistent with its condition at check-in;</li>
@@ -350,7 +355,7 @@ bind('licensor', 'out-licensor', 'Kimberley Turner');
 bind('licenseeName', 'out-licensee', '[Guest Name]');
 bind('checkin', 'out-checkin', '[check-in]');
 bind('checkout', 'out-checkout', '[check-out]');
-bind('bond', 'out-bond', '[security deposit]');
+bind('bond', 'out-bond', '[incidental security hold]');
 
 document.getElementById('licensor').addEventListener('input', function () {
   document.getElementById('licensorSigLabel').textContent = 'Licensor Signature (' + (this.value.trim() || 'Kimberley Turner') + ')';
@@ -358,6 +363,17 @@ document.getElementById('licensor').addEventListener('input', function () {
 document.getElementById('licenseeName').addEventListener('input', function () {
   document.getElementById('guestSigLabel').textContent = 'Licensee (Guest) Signature' + (this.value.trim() ? ' — ' + this.value.trim() : '');
 });
+
+// Keep the hidden full-name field in sync with the first/last name inputs
+function syncLicenseeName() {
+  const first = document.getElementById('licenseeFirstName').value.trim();
+  const last = document.getElementById('licenseeLastName').value.trim();
+  const hidden = document.getElementById('licenseeName');
+  hidden.value = (first + ' ' + last).trim();
+  hidden.dispatchEvent(new Event('input'));
+}
+document.getElementById('licenseeFirstName').addEventListener('input', syncLicenseeName);
+document.getElementById('licenseeLastName').addEventListener('input', syncLicenseeName);
 
 const rulesBox = document.getElementById('rulesBox');
 const outRules = document.getElementById('out-rules');
@@ -501,13 +517,20 @@ if (hash.startsWith('#prefill=')) {
     const encoded = hash.substring(9);
     const json = b64DecodeUnicode(decodeURIComponent(encoded));
     const data = JSON.parse(json);
-    ['licenseeName','licenseePhone','licenseeEmail','occupants','checkin','checkout'].forEach(id => {
+    ['licenseeName','licenseeFirstName','licenseeLastName','licenseePhone','licenseeEmail','occupants','checkin','checkout'].forEach(id => {
       if (data[id] !== undefined) document.getElementById(id).value = data[id];
     });
+    // Older links only carry a single full name — split it across the two fields
+    if (!document.getElementById('licenseeFirstName').value && data.licenseeName) {
+      const parts = String(data.licenseeName).trim().split(/\s+/);
+      document.getElementById('licenseeFirstName').value = parts.shift() || '';
+      document.getElementById('licenseeLastName').value = parts.join(' ');
+    }
+    syncLicenseeName();
     fieldIds.forEach(id => document.getElementById(id).dispatchEvent(new Event('input')));
     const adminStatus = document.getElementById('adminStatus');
     adminStatus.style.color = '#2b5540';
-    adminStatus.textContent = 'Booking request details loaded — add the security deposit, confirm the rules, then sign and generate the guest link.';
+    adminStatus.textContent = 'Booking request details loaded — add the incidental security hold, confirm the rules, then sign and generate the guest link.';
   } catch (e) {
     console.error('Failed to parse prefill data', e);
   }
