@@ -24,31 +24,68 @@
   <h1>CHECK-IN INSTRUCTIONS</h1>
   <div class="subtitle">Howqua Hideaway &nbsp;|&nbsp; 484 Howqua River Road, Howqua VIC 3723</div>
   <div class="callout no-print">
-    <b>Save these instructions before you leave</b> — mobile data drops on Howqua River Rd.<br>
+    <b id="warningText">Save these instructions before you leave</b><span id="warningRest"> — mobile data drops on Howqua River Rd.</span><br>
     <button class="btn" id="downloadBtn" type="button">&#128247; Save as photo</button>
     <button class="btn" id="printBtn" type="button">&#128424; Print / Save as PDF</button>
   </div>
   <h2>Directions</h2>
-  <ol>
+  <ol id="dirList">
     <li><b>Google Maps:</b> <a href="https://maps.app.goo.gl/XB8w3tikGCRUa4u77" target="_blank" rel="noopener">View Route</a> <i>(approx. 9 mins of dirt road)</i>.</li>
     <li>From Mansfield-Woods Point Rd, cross the Howqua River bridge and turn left at the letterboxes onto Howqua River Rd.</li>
     <li>Pass the "Lauriston Girls' School" (Private Property sign on the right).</li>
     <li>The cabin driveway is <b>350m past the school</b> on the right (watch closely!). Look for our sign on the unlocked front gate.</li>
   </ol>
   <h2>Access</h2>
-  <ul>
+  <ul id="accessList">
     <li>Drive to the left side of the cabin near the handrail.</li>
     <li>The lockbox hangs on the right as you reach the top of the handrail.</li>
     <li>Slide the cover down, enter <b id="lockboxCode">the code from your booking confirmation</b>, and pull the toggle down to release the front door key.</li>
     <li><i>(Note: The rear door can only be locked/unlocked from the outside.)</i></li>
   </ul>
   <h2>Settling In</h2>
-  <ul style="margin-bottom:0;">
+  <ul id="settleList" style="margin-bottom:0;">
     <li><b>Arriving in the dark?</b> Light switches are just inside to the right.</li>
     <li>Check the welcome folder on the kitchen island for Wi-Fi, contact numbers, and house info.</li>
   </ul>
 </div>
 <script>
+// Load the latest instructions from the backend (Kim edits them on the admin page).
+// If the fetch fails, the baked-in version above stays.
+(function () {
+  var SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyC4GkZR3bs8Wj2zg8z2oBrsn2JBdoxE0Jcasp298k_QJ8kwzsjKh7mciabOJNSjSVV/exec';
+  fetch(SCRIPT_URL + '?action=get-checkin-content').then(function (r) { return r.json(); }).then(function (res) {
+    if (!res.success || !res.content) return;
+    var c = res.content;
+    var codeMatch = location.hash.match(/code=(\w+)/);
+    var code = codeMatch ? codeMatch[1] : 'the code from your booking confirmation';
+    function fill(listId, text) {
+      var el = document.getElementById(listId);
+      if (!el || !text) return;
+      el.innerHTML = '';
+      text.split('\n').forEach(function (line) {
+        if (!line.trim()) return;
+        var li = document.createElement('li');
+        li.textContent = line.replace(/\[CODE\]/g, code);
+        el.appendChild(li);
+      });
+    }
+    if (c.warning) {
+      var parts = c.warning.split(/ [—-] /);
+      document.getElementById('warningText').textContent = parts[0];
+      document.getElementById('warningRest').textContent = parts.length > 1 ? ' — ' + parts.slice(1).join(' — ') : '';
+    }
+    fill('dirList', c.directions);
+    var dl = document.getElementById('dirList');
+    if (dl && c.mapsUrl) {
+      var li = document.createElement('li');
+      li.innerHTML = '<b>Google Maps:</b> <a href="' + c.mapsUrl + '" target="_blank" rel="noopener">View Route</a> <i>(approx. 9 mins of dirt road)</i>.';
+      dl.insertBefore(li, dl.firstChild);
+    }
+    fill('accessList', c.access);
+    fill('settleList', c.settling);
+  }).catch(function () {});
+})();
+
 // The lockbox code is passed privately in the link from the booking page (#code=...)
 (function () {
   var m = location.hash.match(/code=(\w+)/);
