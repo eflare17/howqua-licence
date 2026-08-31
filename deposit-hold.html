@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Security Deposit — Howqua Hideaway</title>
+<title>Incidental Security Hold — Howqua Hideaway</title>
 <style>
   body { background: #e9e4d8; margin: 0; padding: 20px; }
   .sheet {
@@ -41,15 +41,15 @@
   <div class="logo-wrap">
     <img src="https://eflare17.github.io/howqua-licence/logo.png" onerror="this.style.display='none'">
   </div>
-  <h1>SECURITY DEPOSIT</h1>
+  <h1>INCIDENTAL SECURITY HOLD</h1>
   <div class="subhead">Howqua Hideaway&nbsp;&nbsp;|&nbsp;&nbsp;484 Howqua River Road, Howqua VIC 3723</div>
 
   <div class="booking-summary" id="bookingSummary"></div>
 
   <div id="bondHoldSection">
-    <h2>Security Deposit Hold</h2>
+    <h2>Incidental Security Hold</h2>
     <div style="font-size: 13px; color: #666; margin-bottom: 14px;">
-      You'll be taken to Stripe's secure payment page to enter your card details. Your card will be <b>authorized</b> for the security deposit amount (<span id="depositAmountInline">$0.00</span>) — this places a temporary hold, it does not charge you. The Licensor will release the hold after checkout if there's no damage, or claim against it if there is. Authorization holds also expire automatically after a few days if not actioned.
+      You'll be taken to Stripe's secure payment page to enter your card details. Your card will be <b>authorized</b> for the incidental security hold amount (<span id="depositAmountInline">$0.00</span>) — this places a temporary hold, it does not charge you. The Licensor will release the hold after checkout if there's no damage, or claim against it if there is. Authorization holds also expire automatically after a few days if not actioned.
     </div>
     <div style="text-align:center;">
       <button id="authorizeBondBtn">Continue to Stripe to Authorize Hold</button>
@@ -83,7 +83,7 @@ document.getElementById('bookingSummary').innerHTML =
   '<div><b>Guest:</b> ' + (bookingData.licenseeName || '(not provided)') + '</div>' +
   '<div><b>Check-in:</b> ' + (bookingData.checkin || '(not provided)') + '</div>' +
   '<div><b>Check-out:</b> ' + (bookingData.checkout || '(not provided)') + '</div>' +
-  '<div><b>Deposit:</b> ' + (bookingData.bond || '(not provided)') + '</div>';
+  '<div><b>Security hold:</b> ' + (bookingData.bond || '(not provided)') + '</div>';
 document.getElementById('depositAmountInline').textContent = bookingData.bond || '(not set)';
 
 // if we've just been returned from Stripe after a successful hold, show success and notify Kim
@@ -92,7 +92,7 @@ if (urlParams.get('paid') === 'true') {
   document.getElementById('authorizeBondBtn').style.display = 'none';
   const holdStatus = document.getElementById('bondHoldStatus');
   holdStatus.style.color = '#2b5540';
-  holdStatus.textContent = '✓ Security deposit hold authorized. You can close this page now.';
+  holdStatus.textContent = '✓ Incidental security hold authorized. You can close this page now.';
 
   const notifyForm = new FormData();
   notifyForm.append('type', 'notify-deposit-authorized');
@@ -129,7 +129,7 @@ document.getElementById('authorizeBondBtn').addEventListener('click', async () =
 
     if (!result.success) {
       holdStatus.style.color = '#a33';
-      holdStatus.textContent = 'Could not start security deposit hold: ' + (result.message || 'unknown error');
+      holdStatus.textContent = 'Could not start incidental security hold: ' + (result.message || 'unknown error');
       authorizeBtn.disabled = false;
       return;
     }
