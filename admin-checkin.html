@@ -125,25 +125,31 @@ document.getElementById('loginBtn').addEventListener('click', function () {
 });
 document.getElementById('password').addEventListener('keydown', function (e) { if (e.key === 'Enter') document.getElementById('loginBtn').click(); });
 function buildSheetForImage(content) {
+  // Laid out for a phone screen: narrow portrait sheet, large type.
+  // Rendered at 620px wide x2 = 1240px, which is about a modern phone's
+  // physical screen width, so it lands roughly 1:1 and stays crisp.
   var code = content.lockboxCode || '';
   var esc = function (s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); };
   var items = function (text) {
     return text.split('\n').filter(function (l) { return l.trim(); })
-      .map(function (l) { return '<li>' + esc(l).replace(/\[CODE\]/g, '<b>' + esc(code) + '</b>') + '</li>'; }).join('');
+      .map(function (l) { return '<li style="margin-bottom:9px;">' + esc(l).replace(/\[CODE\]/g, '<b>' + esc(code) + '</b>') + '</li>'; }).join('');
   };
   var d = document.createElement('div');
-  d.style.cssText = 'position:absolute; left:-10000px; top:0; width:800px; background:#fff; padding:36px 32px; font-family:Georgia,serif; color:#2b2b2b;';
+  d.style.cssText = 'position:absolute; left:-10000px; top:0; width:620px; background:#fff; padding:34px 30px; font-family:Georgia,serif; color:#2b2b2b; box-sizing:border-box;';
   d.innerHTML =
-    '<h1 style="text-align:center; font-size:24px; letter-spacing:1px; margin:0 0 4px;">CHECK-IN INSTRUCTIONS</h1>' +
-    '<div style="text-align:center; color:#666; font-size:13px; margin-bottom:18px; font-family:Arial,sans-serif;">Howqua Hideaway &nbsp;|&nbsp; 484 Howqua River Road, Howqua VIC 3723</div>' +
-    '<div style="background:#f4f1ea; border-left:4px solid #2b5540; padding:10px 14px; font-size:14px; margin-bottom:18px; font-family:Arial,sans-serif;">' + esc(content.warning) + '</div>' +
-    '<h2 style="font-size:17px; color:#2b5540; margin:0 0 8px;">Directions</h2>' +
-    '<ol style="font-family:Arial,sans-serif; font-size:14px; line-height:1.7; margin:0 0 18px; padding-left:22px;">' + items(content.directions) + '</ol>' +
-    '<h2 style="font-size:17px; color:#2b5540; margin:0 0 8px;">Access</h2>' +
-    '<ul style="font-family:Arial,sans-serif; font-size:14px; line-height:1.7; margin:0 0 18px; padding-left:22px;">' + items(content.access) + '</ul>' +
-    '<h2 style="font-size:17px; color:#2b5540; margin:0 0 8px;">Settling In</h2>' +
-    '<ul style="font-family:Arial,sans-serif; font-size:14px; line-height:1.7; margin:0; padding-left:22px;">' + items(content.settling) + '</ul>' +
-    (content.contactPhone ? '<p style="font-family:Arial,sans-serif; font-size:14px;">Any trouble at all, call ' + esc(content.contactPhone) + '.</p>' : '');
+    '<h1 style="text-align:center; font-size:30px; letter-spacing:1px; margin:0 0 6px;">CHECK-IN INSTRUCTIONS</h1>' +
+    '<div style="text-align:center; color:#666; font-size:16px; line-height:1.5; margin-bottom:20px; font-family:Arial,sans-serif;">Howqua Hideaway<br>484 Howqua River Road, Howqua VIC 3723</div>' +
+    '<div style="background:#f4f1ea; border-left:5px solid #2b5540; padding:14px 16px; font-size:17px; line-height:1.5; margin-bottom:24px; font-family:Arial,sans-serif;">' + esc(content.warning) + '</div>' +
+    '<h2 style="font-size:23px; color:#2b5540; margin:0 0 10px;">Directions</h2>' +
+    '<ol style="font-family:Arial,sans-serif; font-size:18px; line-height:1.55; margin:0 0 26px; padding-left:26px;">' + items(content.directions) + '</ol>' +
+    '<h2 style="font-size:23px; color:#2b5540; margin:0 0 10px;">Getting In</h2>' +
+    (code ? '<div style="border:2px solid #2b5540; border-radius:6px; padding:12px; text-align:center; margin-bottom:16px;">' +
+      '<div style="font-family:Arial,sans-serif; font-size:14px; letter-spacing:1.5px; color:#2b5540; margin-bottom:4px;">LOCKBOX CODE</div>' +
+      '<div style="font-family:Arial,sans-serif; font-size:40px; font-weight:bold; letter-spacing:6px; color:#2b2b2b;">' + esc(code) + '</div></div>' : '') +
+    '<ul style="font-family:Arial,sans-serif; font-size:18px; line-height:1.55; margin:0 0 26px; padding-left:26px;">' + items(content.access) + '</ul>' +
+    '<h2 style="font-size:23px; color:#2b5540; margin:0 0 10px;">Settling In</h2>' +
+    '<ul style="font-family:Arial,sans-serif; font-size:18px; line-height:1.55; margin:0; padding-left:26px;">' + items(content.settling) + '</ul>' +
+    (content.contactPhone ? '<p style="font-family:Arial,sans-serif; font-size:18px; margin:22px 0 0; text-align:center;">Any trouble at all, call <b>' + esc(content.contactPhone) + '</b></p>' : '');
   document.body.appendChild(d);
   return d;
 }
