@@ -103,21 +103,14 @@ document.getElementById('downloadBtn').addEventListener('click', function () {
     btn.disabled = false;
     btn.innerHTML = '&#128247; Save as photo';
     canvas.toBlob(function (blob) {
-      var isMobile = (navigator.userAgentData && navigator.userAgentData.mobile) ||
-        /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
-      var file = new File([blob], 'Howqua-Hideaway-Check-In.png', { type: 'image/png' });
-      if (isMobile && navigator.canShare && navigator.canShare({ files: [file] })) {
-        // Phone/tablet: open the share sheet so it can go straight to Photos
-        navigator.share({ files: [file], title: 'Howqua Hideaway Check-In' }).catch(function () {});
-      } else {
-        // Computer: just download the image
-        var a = document.createElement('a');
-        a.href = URL.createObjectURL(blob);
-        a.download = 'Howqua-Hideaway-Check-In.png';
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-      }
+      // Save the image directly - no share sheet. On Android it lands in
+      // Downloads and shows up in the gallery; on iPhone it goes to Files.
+      var a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = 'Howqua-Hideaway-Check-In.png';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
     }, 'image/png');
   }).catch(function () {
     callout.style.display = '';
