@@ -26,6 +26,7 @@
   .sent-no { color: #a33; }
   #adminPanel { display: none; }
 </style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 </head>
 <body>
 <div class="sheet">
@@ -123,12 +124,43 @@ document.getElementById('loginBtn').addEventListener('click', function () {
   load();
 });
 document.getElementById('password').addEventListener('keydown', function (e) { if (e.key === 'Enter') document.getElementById('loginBtn').click(); });
+function buildSheetForImage(content) {
+  var code = content.lockboxCode || '';
+  var esc = function (s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); };
+  var items = function (text) {
+    return text.split('\n').filter(function (l) { return l.trim(); })
+      .map(function (l) { return '<li>' + esc(l).replace(/\[CODE\]/g, '<b>' + esc(code) + '</b>') + '</li>'; }).join('');
+  };
+  var d = document.createElement('div');
+  d.style.cssText = 'position:absolute; left:-10000px; top:0; width:800px; background:#fff; padding:36px 32px; font-family:Georgia,serif; color:#2b2b2b;';
+  d.innerHTML =
+    '<h1 style="text-align:center; font-size:24px; letter-spacing:1px; margin:0 0 4px;">CHECK-IN INSTRUCTIONS</h1>' +
+    '<div style="text-align:center; color:#666; font-size:13px; margin-bottom:18px; font-family:Arial,sans-serif;">Howqua Hideaway &nbsp;|&nbsp; 484 Howqua River Road, Howqua VIC 3723</div>' +
+    '<div style="background:#f4f1ea; border-left:4px solid #2b5540; padding:10px 14px; font-size:14px; margin-bottom:18px; font-family:Arial,sans-serif;">' + esc(content.warning) + '</div>' +
+    '<h2 style="font-size:17px; color:#2b5540; margin:0 0 8px;">Directions</h2>' +
+    '<ol style="font-family:Arial,sans-serif; font-size:14px; line-height:1.7; margin:0 0 18px; padding-left:22px;">' + items(content.directions) + '</ol>' +
+    '<h2 style="font-size:17px; color:#2b5540; margin:0 0 8px;">Access</h2>' +
+    '<ul style="font-family:Arial,sans-serif; font-size:14px; line-height:1.7; margin:0 0 18px; padding-left:22px;">' + items(content.access) + '</ul>' +
+    '<h2 style="font-size:17px; color:#2b5540; margin:0 0 8px;">Settling In</h2>' +
+    '<ul style="font-family:Arial,sans-serif; font-size:14px; line-height:1.7; margin:0; padding-left:22px;">' + items(content.settling) + '</ul>' +
+    (content.contactPhone ? '<p style="font-family:Arial,sans-serif; font-size:14px;">Any trouble at all, call ' + esc(content.contactPhone) + '.</p>' : '');
+  document.body.appendChild(d);
+  return d;
+}
 document.getElementById('saveBtn').addEventListener('click', function () {
   var content = {};
   FIELD_IDS.forEach(function (k) { content[k] = document.getElementById('f_' + k).value; });
-  setStatus('Saving…', true);
-  api({ sub: 'save', content: JSON.stringify(content) }).then(function (res) {
-    setStatus(res.success ? 'Saved — the guest page and emails now use the new wording.' : res.message, res.success);
+  setStatus('Saving and updating the photo attachment…', true);
+  var sheet = buildSheetForImage(content);
+  html2canvas(sheet, { scale: 2, backgroundColor: '#ffffff' }).then(function (canvas) {
+    sheet.remove();
+    var pngBase64 = canvas.toDataURL('image/png').split(',')[1];
+    return api({ sub: 'save', content: JSON.stringify(content), pngBase64: pngBase64 });
+  }).catch(function () {
+    if (sheet && sheet.parentNode) sheet.remove();
+    return api({ sub: 'save', content: JSON.stringify(content) });
+  }).then(function (res) {
+    setStatus(res.success ? res.message + ' The guest page and emails now use the new version.' : res.message, res.success);
   });
 });
 </script>
