@@ -981,5 +981,55 @@ document.getElementById('submitBtn').addEventListener('click', async () => {
     new MutationObserver(reveal).observe(statusEl, { childList: true, characterData: true, subtree: true });
   })();
 </script>
+<script id="keep-signature-through-resize">
+  /* Mobile browsers fire a resize whenever the address bar slides in or out,
+     and the signature pad rebuilds its canvas on resize, which erases the
+     drawing. The signature is read off the canvas at submit time, so a wipe
+     would send a blank signature with nobody noticing. Keep a copy as it is
+     drawn and repaint it if a resize clears it. Clearing the pad drops the
+     copy, so a cleared signature never comes back. */
+  (function () {
+    var IDS = ['sigPadLicensor', 'sigPadGuest'];
+    var snaps = {}, suppressUntil = 0, timer = null;
+    function blank(c) {
+      try {
+        var px = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
+        for (var i = 3; i < px.length; i += 4) { if (px[i] > 10) return false; }
+        return true;
+      } catch (e) { return false; }
+    }
+    function snap(id) {
+      if (Date.now() < suppressUntil) return;
+      var c = document.getElementById(id);
+      if (!c || !c.width || !c.height || blank(c)) return;
+      try { snaps[id] = c.toDataURL('image/png'); } catch (e) {}
+    }
+    function restore(id) {
+      var c = document.getElementById(id), data = snaps[id];
+      if (!c || !data || !c.width || !c.height || !blank(c)) return;
+      var img = new Image();
+      img.onload = function () {
+        try { c.getContext('2d').drawImage(img, 0, 0, c.width, c.height); } catch (e) {}
+      };
+      img.src = data;
+    }
+    ['pointerup', 'mouseup', 'touchend', 'pointercancel'].forEach(function (ev) {
+      document.addEventListener(ev, function () {
+        setTimeout(function () { IDS.forEach(snap); }, 40);
+      }, true);
+    });
+    IDS.forEach(function (id, i) {
+      var b = document.getElementById(i === 0 ? 'clearSigLicensor' : 'clearSigGuest');
+      if (b) b.addEventListener('click', function () {
+        suppressUntil = Date.now() + 800;
+        delete snaps[id];
+      });
+    });
+    window.addEventListener('resize', function () {
+      clearTimeout(timer);
+      timer = setTimeout(function () { IDS.forEach(restore); }, 150);
+    });
+  })();
+</script>
 </body>
 </html>
