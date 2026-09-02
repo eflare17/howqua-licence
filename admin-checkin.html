@@ -25,6 +25,12 @@
   .sent-yes { color: #2b5540; font-weight: bold; }
   .sent-no { color: #a33; }
   #adminPanel { display: none; }
+
+  /* --- Mobile refinements --- */
+  @media (max-width: 600px) {
+    input:not([type="checkbox"]):not([type="radio"]), select, textarea { font-size: 16px; }
+    select { width: 100%; max-width: 100%; }
+  }
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 </head>
