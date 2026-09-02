@@ -306,7 +306,7 @@ function renderCalendar() {
 
     const minNights = minNightsByType[document.getElementById('bookingType').value];
     const tooSoonForCheckout = rangeStart && !rangeEnd && d > rangeStart &&
-      (d - rangeStart) / (1000 * 60 * 60 * 24) < minNights;
+      Math.round((d - rangeStart) / (1000 * 60 * 60 * 24)) < minNights;
     const dateKey = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
     const isBooked = busyDates.has(dateKey);
 
@@ -379,7 +379,7 @@ function updateSummary() {
 document.getElementById('bookingType').addEventListener('change', () => {
   if (rangeStart && rangeEnd) {
     const minNights = minNightsByType[document.getElementById('bookingType').value];
-    const nights = (rangeEnd - rangeStart) / (1000 * 60 * 60 * 24);
+    const nights = Math.round((rangeEnd - rangeStart) / (1000 * 60 * 60 * 24));
     if (nights < minNights) {
       rangeEnd = null; // no longer meets the new package's minimum — ask them to re-pick check-out
     }
