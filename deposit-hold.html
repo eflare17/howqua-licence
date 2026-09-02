@@ -96,6 +96,7 @@ if (urlParams.get('paid') === 'true') {
 
   const notifyForm = new FormData();
   notifyForm.append('type', 'notify-deposit-authorized');
+  notifyForm.append('bookingId', bookingData.bookingId || '');
   notifyForm.append('licenseeName', bookingData.licenseeName || 'Guest');
   notifyForm.append('bond', bookingData.bond || '');
   notifyForm.append('bondHoldRef', urlParams.get('session_id') || '');
@@ -121,6 +122,7 @@ document.getElementById('authorizeBondBtn').addEventListener('click', async () =
     form.append('amount', bookingData.bond || '0');
     form.append('successUrl', successUrl);
     form.append('cancelUrl', cancelUrl);
+    form.append('bookingId', bookingData.bookingId || '');
     form.append('licenseeName', bookingData.licenseeName || '');
     form.append('checkin', bookingData.checkin || '');
     form.append('checkout', bookingData.checkout || '');

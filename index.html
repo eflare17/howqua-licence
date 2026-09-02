@@ -527,6 +527,7 @@ document.getElementById('downloadSigBtn').addEventListener('click', () => {
 // ---------- guest link mode detection ----------
 const hash = window.location.hash;
 let isGuestMode = false;
+let currentBookingId = ''; // follows the booking from request through to signing
 
 if (hash.startsWith('#prefill=')) {
   // Pre-fill from a booking request — fields stay editable, this is for Kim/Tyson to review before signing
@@ -534,6 +535,7 @@ if (hash.startsWith('#prefill=')) {
     const encoded = hash.substring(9);
     const json = b64DecodeUnicode(decodeURIComponent(encoded));
     const data = JSON.parse(json);
+    if (data.bookingId) currentBookingId = data.bookingId;
     ['licenseeName','licenseeFirstName','licenseeLastName','licenseePhone','licenseeEmail','occupants','checkin','checkout'].forEach(id => {
       if (data[id] !== undefined) document.getElementById(id).value = data[id];
     });
@@ -558,6 +560,7 @@ if (hash.startsWith('#data=')) {
     const encoded = hash.substring(6);
     const json = b64DecodeUnicode(decodeURIComponent(encoded));
     const data = JSON.parse(json);
+    if (data.bookingId) currentBookingId = data.bookingId;
     fieldIds.forEach(id => { if (data[id] !== undefined) document.getElementById(id).value = data[id]; });
     if (data.rules !== undefined) rulesBox.value = data.rules;
     fieldIds.forEach(id => document.getElementById(id).disabled = true);
@@ -663,6 +666,7 @@ document.getElementById('genLinkBtn').addEventListener('click', () => {
     data.rules = rulesBox.value;
   }
   data.licensorSignedDate = new Date().toLocaleString('en-AU');
+  if (currentBookingId) data.bookingId = currentBookingId;
 
   const json = JSON.stringify(data);
   const encoded = encodeURIComponent(b64EncodeUnicode(json));
@@ -913,6 +917,7 @@ document.getElementById('submitBtn').addEventListener('click', async () => {
     // build a standalone security-deposit link Kim can send closer to check-in,
     // regardless of whether the guest already authorized a hold during signing
     const depositLinkData = {
+      bookingId: currentBookingId,
       licenseeName: document.getElementById('licenseeName').value.trim() || 'Guest',
       checkin: document.getElementById('checkin').value,
       checkout: document.getElementById('checkout').value,
@@ -921,6 +926,7 @@ document.getElementById('submitBtn').addEventListener('click', async () => {
     };
     const depositLinkEncoded = encodeURIComponent(b64EncodeUnicode(JSON.stringify(depositLinkData)));
     const depositLink = 'https://eflare17.github.io/howqua-licence/deposit-hold.html#data=' + depositLinkEncoded;
+    sendForm.append('bookingId', currentBookingId);
     sendForm.append('depositLinkForKim', depositLink);
     sendForm.append('pdfBase64', pdfBase64);
 

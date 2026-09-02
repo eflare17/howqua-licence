@@ -497,8 +497,14 @@ document.getElementById('submitBtn').addEventListener('click', async () => {
   statusEl.style.color = '#2b5540';
   statusEl.textContent = 'Sending your request...';
 
+  // generate a booking ID now so it follows this booking all the way through —
+  // the licence tool, Stripe, the calendar and the admin page all use the same ID
+  const bookingId = 'HH-' + new Date().getFullYear() + '-' +
+    Array.from({ length: 8 }, () => '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ'[Math.floor(Math.random() * 36)]).join('');
+
   // build a pre-fill link for Kim/Tyson to open the Licence to Occupy tool with these details already in
   const prefillData = {
+    bookingId: bookingId,
     licenseeName: name,
     licenseeFirstName: firstName,
     licenseeLastName: lastName,
@@ -513,6 +519,7 @@ document.getElementById('submitBtn').addEventListener('click', async () => {
 
   const formData = new FormData();
   formData.append('type', 'booking');
+  formData.append('bookingId', bookingId);
   formData.append('licenseeName', name);
   formData.append('licenseeFirstName', firstName);
   formData.append('licenseeLastName', lastName);

@@ -26,6 +26,22 @@
   .sent-no { color: #a33; }
   #adminPanel { display: none; }
 
+  /* --- Booking pipeline (from the bookings sheet) --- */
+  .pipeline-card { border: 1px solid #e2ddd0; border-radius: 6px; padding: 12px 14px; margin-bottom: 10px; background: #fdfcfa; }
+  .pipeline-top { display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 8px; }
+  .pipeline-name { font-family: Arial, sans-serif; font-weight: bold; font-size: 15px; }
+  .pipeline-meta { font-family: Arial, sans-serif; color: #666; font-size: 12px; margin-top: 2px; }
+  .pipeline-id { font-family: Arial, sans-serif; color: #aaa; font-size: 11px; margin-top: 2px; }
+  .badge { display: inline-block; padding: 3px 10px; border-radius: 20px; font-size: 11px; font-weight: bold; font-family: Arial, sans-serif; white-space: nowrap; }
+  .badge-requested { background: #fff3cd; color: #7a5c00; }
+  .badge-signed { background: #d4edda; color: #1e5c2c; }
+  .badge-deposit { background: #d0e6f7; color: #1a5289; }
+  .badge-completed { background: #e6e6e6; color: #666; }
+  .pipeline-actions { margin-top: 10px; display: flex; gap: 6px; flex-wrap: wrap; }
+  .pipeline-actions .btn.small { margin: 0; }
+  .pipeline-actions a.btn.small { text-decoration: none; display: inline-block; }
+  .pipeline-status { font-family: Arial, sans-serif; font-size: 12px; color: #2b5540; margin-top: 6px; min-height: 14px; }
+
   /* --- Mobile refinements --- */
   @media (max-width: 600px) {
     input:not([type="checkbox"]):not([type="radio"]), select, textarea { font-size: 16px; }
@@ -46,7 +62,11 @@
   </div>
 
   <div id="adminPanel">
-    <h2>Upcoming bookings</h2>
+    <h2>Booking pipeline</h2>
+    <div class="hint">Every booking, from first request through to deposit held. Generate the signing link for new requests, copy the deposit link to send when you're ready, jump to the hold in Stripe, or send check-in instructions.</div>
+    <div id="pipelineList"><div class="hint">Loading…</div></div>
+
+    <h2>Upcoming check-ins (from calendar)</h2>
     <div class="hint">Bookings come from the calendar (added automatically when a licence is signed). "Send now" emails the guest their check-in instructions immediately.</div>
     <table>
       <thead><tr><th>Guest</th><th>Check-in</th><th>Email</th><th>Check-in email</th><th></th></tr></thead>
@@ -90,6 +110,100 @@ function api(fields) {
   return fetch(SCRIPT_URL, { method: 'POST', body: body }).then(function (r) { return r.json(); });
 }
 var FIELD_IDS = ['warning', 'mapsUrl', 'directions', 'access', 'settling', 'lockboxCode', 'contactPhone'];
+
+/* ---------- Booking pipeline ---------- */
+function b64EncodeUnicode(str) {
+  return btoa(encodeURIComponent(str).replace(/%([0-9A-F]{2})/g, function (m, p1) { return String.fromCharCode('0x' + p1); }));
+}
+function pipelineBadge(status) {
+  var map = { 'Requested': 'badge-requested', 'Signed': 'badge-signed', 'Deposit Held': 'badge-deposit', 'Completed': 'badge-completed' };
+  return '<span class="badge ' + (map[status] || 'badge-requested') + '">' + (status || 'Unknown') + '</span>';
+}
+function pipelineDepositLink(b) {
+  var data = { bookingId: b.bookingId, licenseeName: b.guestName, checkin: b.checkin, checkout: b.checkout, bond: b.bond, licenseeEmail: b.email };
+  return 'https://eflare17.github.io/howqua-licence/deposit-hold.html#data=' + encodeURIComponent(b64EncodeUnicode(JSON.stringify(data)));
+}
+function pipelineStatus(id, msg, ok) {
+  var el = document.getElementById('pstatus-' + id);
+  if (el) { el.textContent = msg; el.style.color = ok ? '#2b5540' : '#a33'; }
+}
+function renderPipeline(bookings) {
+  var list = document.getElementById('pipelineList');
+  var active = bookings.filter(function (b) { return b.status !== 'Completed'; });
+  active.sort(function (a, b) { return new Date(a.checkin) - new Date(b.checkin); });
+  if (!active.length) { list.innerHTML = '<div class="hint">No bookings in the pipeline yet.</div>'; return; }
+  list.innerHTML = '';
+  active.forEach(function (b) {
+    var card = document.createElement('div');
+    card.className = 'pipeline-card';
+    card.innerHTML =
+      '<div class="pipeline-top"><div>' +
+        '<div class="pipeline-name">' + b.guestName + '</div>' +
+        '<div class="pipeline-meta">' + (b.checkin || '?') + ' → ' + (b.checkout || '?') + (b.bond ? ' · ' + b.bond : '') + (b.email ? ' · ' + b.email : '') + '</div>' +
+        '<div class="pipeline-id">' + b.bookingId + '</div>' +
+      '</div>' + pipelineBadge(b.status) + '</div>' +
+      '<div class="pipeline-actions"></div>' +
+      '<div class="pipeline-status" id="pstatus-' + b.bookingId + '"></div>';
+    var actions = card.querySelector('.pipeline-actions');
+
+    if (b.status === 'Requested') {
+      var genBtn = document.createElement('button');
+      genBtn.className = 'btn small'; genBtn.type = 'button'; genBtn.textContent = 'Generate signing link';
+      genBtn.addEventListener('click', function () {
+        genBtn.disabled = true; pipelineStatus(b.bookingId, 'Generating…', true);
+        fetch(SCRIPT_URL + '?action=get-signing-link&password=' + encodeURIComponent(password) + '&bookingId=' + encodeURIComponent(b.bookingId))
+          .then(function (r) { return r.json(); })
+          .then(function (res) {
+            if (!res.success) { pipelineStatus(b.bookingId, res.message, false); genBtn.disabled = false; return; }
+            navigator.clipboard.writeText(res.link).catch(function () {});
+            pipelineStatus(b.bookingId, '✓ Signing link copied — open it, review, sign, then generate the guest link.', true);
+            genBtn.disabled = false;
+          });
+      });
+      actions.appendChild(genBtn);
+    }
+    if (b.status === 'Signed' || b.status === 'Deposit Held') {
+      var depBtn = document.createElement('button');
+      depBtn.className = 'btn small'; depBtn.type = 'button'; depBtn.textContent = 'Copy deposit link';
+      depBtn.addEventListener('click', function () {
+        navigator.clipboard.writeText(pipelineDepositLink(b)).catch(function () {});
+        pipelineStatus(b.bookingId, '✓ Deposit link copied — send it to the guest when you\'re ready.', true);
+      });
+      actions.appendChild(depBtn);
+    }
+    if (b.status === 'Deposit Held' && b.stripeReference) {
+      var stripeLink = document.createElement('a');
+      stripeLink.className = 'btn small'; stripeLink.target = '_blank'; stripeLink.textContent = 'View in Stripe';
+      stripeLink.href = 'https://dashboard.stripe.com/test/payments/' + b.stripeReference; // change /test/ to nothing once live
+      actions.appendChild(stripeLink);
+    }
+    if (b.calendarEventId) {
+      var ciBtn = document.createElement('button');
+      ciBtn.className = 'btn small'; ciBtn.type = 'button';
+      ciBtn.textContent = b.checkinSent ? 'Resend check-in email' : 'Send check-in email';
+      ciBtn.addEventListener('click', function () {
+        if (!confirm('Email the check-in instructions to ' + b.guestName + (b.email ? ' (' + b.email + ')' : '') + '?')) return;
+        ciBtn.disabled = true;
+        api({ sub: 'send', eventId: b.calendarEventId }).then(function (res) {
+          pipelineStatus(b.bookingId, res.message, res.success);
+          ciBtn.disabled = false;
+          if (res.success) load();
+        });
+      });
+      actions.appendChild(ciBtn);
+    }
+    list.appendChild(card);
+  });
+}
+function loadPipeline() {
+  fetch(SCRIPT_URL + '?action=get-bookings&password=' + encodeURIComponent(password))
+    .then(function (r) { return r.json(); })
+    .then(function (res) {
+      if (!res.success) { document.getElementById('pipelineList').innerHTML = '<div class="hint">' + (res.message || 'Could not load bookings.') + '</div>'; return; }
+      renderPipeline(res.bookings || []);
+    })
+    .catch(function () { document.getElementById('pipelineList').innerHTML = '<div class="hint">Could not load the booking pipeline.</div>'; });
+}
 function renderBookings(bookings) {
   var tbody = document.getElementById('bookingRows');
   if (!bookings.length) { tbody.innerHTML = '<tr><td colspan="5">No upcoming bookings in the next 90 days.</td></tr>'; return; }
@@ -121,6 +235,7 @@ function load() {
     document.getElementById('adminPanel').style.display = 'block';
     FIELD_IDS.forEach(function (k) { document.getElementById('f_' + k).value = res.content[k] || ''; });
     renderBookings(res.bookings || []);
+    loadPipeline();
     setStatus('', true);
   }).catch(function () { setStatus('Could not reach the backend.', false); });
 }
