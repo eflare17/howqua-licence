@@ -960,5 +960,26 @@ document.getElementById('submitBtn').addEventListener('click', async () => {
   }
 });
 </script>
+<script id="keep-signer-in-place">
+  /* After submitting, the page collapses and the browser dumps the signer back
+     at the top. Follow the status message instead, so they stay where their
+     signature and the button are and can see the result without scrolling. */
+  (function () {
+    var statusEl = document.getElementById('status');
+    if (!statusEl || !window.MutationObserver) return;
+    var ready = false, timer = null;
+    setTimeout(function () { ready = true; }, 1200);
+    function reveal() {
+      if (!ready) return;
+      clearTimeout(timer);
+      timer = setTimeout(function () {
+        if (!statusEl.textContent.trim()) return;
+        try { statusEl.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
+        catch (e) { statusEl.scrollIntoView(false); }
+      }, 120);
+    }
+    new MutationObserver(reveal).observe(statusEl, { childList: true, characterData: true, subtree: true });
+  })();
+</script>
 </body>
 </html>
