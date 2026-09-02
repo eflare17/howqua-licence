@@ -102,7 +102,17 @@
     border-width: 0 2px 2px 0;
     transform: rotate(45deg);
   }
-</style>
+
+    /* --- Mobile refinements --- */
+    .agree-label { align-items: flex-start; white-space: normal; }
+    .agree-label input[type="checkbox"] { flex: 0 0 auto; margin-top: 2px; }
+    @media (max-width: 600px) {
+      input[type="text"], input[type="tel"], input[type="email"],
+      input[type="number"], input[type="date"], select, textarea { font-size: 16px; }
+      .cal-day { min-height: 40px; display: flex; align-items: center; justify-content: center; }
+      .cal-nav { width: 40px; height: 40px; font-size: 18px; }
+    }
+  </style>
 </head>
 <body>
 <div class="sheet" id="sheet">
