@@ -966,6 +966,7 @@ document.getElementById('submitBtn').addEventListener('click', async () => {
         try {
           const diditForm = new FormData();
           diditForm.append('type', 'create-didit-session');
+          diditForm.append('bookingId', currentBookingId || '');
           diditForm.append('licenseeName', licenseeName);
           diditForm.append('licenseeEmail', guestEmail);
           diditForm.append('checkin', document.getElementById('checkin').value);

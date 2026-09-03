@@ -42,6 +42,9 @@
   .badge-hold-captured { background: #f8d7da; color: #842029; }
   .badge-hold-none { background: #f1f1f1; color: #888; }
   .badge-hold-sent { background: #fff3cd; color: #7a5c00; }
+  .badge-id-ok { background: #d4edda; color: #1e5c2c; }
+  .badge-id-bad { background: #f8d7da; color: #842029; }
+  .badge-id-pending { background: #fff3cd; color: #7a5c00; }
   .pipeline-actions { margin-top: 10px; display: flex; gap: 6px; flex-wrap: wrap; }
   .pipeline-actions .btn.small { margin: 0; }
   .pipeline-actions a.btn.small { text-decoration: none; display: inline-block; }
@@ -144,6 +147,14 @@ function holdBadge(b) {
   if (b.status === 'Signed') return '<span class="badge badge-hold-none">Hold link not sent</span>';
   return '';
 }
+function idBadge(b) {
+  // ID verification result, written by the Didit webhook
+  const st = (b.idStatus || '').toLowerCase();
+  if (!st) return b.diditSessionId ? '<span class="badge badge-id-pending">ID check started</span>' : '';
+  if (st.indexOf('approv') >= 0 || st.indexOf('verified') >= 0) return '<span class="badge badge-id-ok">ID approved</span>';
+  if (st.indexOf('declin') >= 0 || st.indexOf('reject') >= 0 || st.indexOf('fail') >= 0) return '<span class="badge badge-id-bad">ID declined</span>';
+  return '<span class="badge badge-id-pending">ID ' + b.idStatus + '</span>';
+}
 function pipelineDepositLink(b) {
   var data = { bookingId: b.bookingId, licenseeName: b.guestName, checkin: b.checkin, checkout: b.checkout, bond: b.bond, licenseeEmail: b.email };
   return 'https://eflare17.github.io/howqua-licence/deposit-hold.html#data=' + encodeURIComponent(b64EncodeUnicode(JSON.stringify(data)));
@@ -191,7 +202,7 @@ function renderPipeline(bookings) {
         '<div class="pipeline-name">' + b.guestName + '</div>' +
         '<div class="pipeline-meta">' + (b.checkin || '?') + ' → ' + (b.checkout || '?') + (b.bond ? ' · ' + b.bond : '') + (b.email ? ' · ' + b.email : '') + '</div>' +
         '<div class="pipeline-id">' + b.bookingId + '</div>' +
-      '</div><div style="text-align:right;">' + pipelineBadge(b.status) + '<div style="margin-top:5px;">' + holdBadge(b) + '</div></div></div>' +
+      '</div><div style="text-align:right;">' + pipelineBadge(b.status) + '<div style="margin-top:5px;">' + holdBadge(b) + '</div>' + (idBadge(b) ? '<div style="margin-top:5px;">' + idBadge(b) + '</div>' : '') + '</div></div>' +
       '<div class="pipeline-actions"></div>' +
       '<div class="pipeline-status" id="pstatus-' + b.bookingId + '"></div>';
     var actions = card.querySelector('.pipeline-actions');
@@ -244,6 +255,13 @@ function renderPipeline(bookings) {
       // account ID pinned so it always opens Howqua's Stripe account, even if another account is active in the browser
       stripeLink.href = 'https://dashboard.stripe.com/acct_1U7YnNIvavyq88hu/payments/' + b.stripeReference; // live mode — add /test/ back before /payments/ if ever switched to test keys
       actions.appendChild(stripeLink);
+    }
+    if (b.diditSessionId || b.status === 'Signed' || b.status === 'Deposit Held') {
+      var diditLink = document.createElement('a');
+      diditLink.className = 'btn small'; diditLink.target = '_blank'; diditLink.textContent = 'View in Didit';
+      diditLink.href = 'https://business.didit.me/';
+      diditLink.title = b.diditSessionId ? 'Didit session ' + b.diditSessionId : 'Open the Didit console';
+      actions.appendChild(diditLink);
     }
     if (b.calendarEventId) {
       var ciBtn = document.createElement('button');
