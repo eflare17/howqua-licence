@@ -174,7 +174,8 @@ function renderPipeline(bookings) {
     if (b.status === 'Deposit Held' && b.stripeReference) {
       var stripeLink = document.createElement('a');
       stripeLink.className = 'btn small'; stripeLink.target = '_blank'; stripeLink.textContent = 'View in Stripe';
-      stripeLink.href = 'https://dashboard.stripe.com/test/payments/' + b.stripeReference; // change /test/ to nothing once live
+      // account ID pinned so it always opens Howqua's Stripe account, even if another account is active in the browser
+      stripeLink.href = 'https://dashboard.stripe.com/acct_1U7YnNIvavyq88hu/test/payments/' + b.stripeReference; // remove /test/ once live
       actions.appendChild(stripeLink);
     }
     if (b.calendarEventId) {
