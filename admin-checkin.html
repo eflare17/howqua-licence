@@ -37,6 +37,11 @@
   .badge-signed { background: #d4edda; color: #1e5c2c; }
   .badge-deposit { background: #d0e6f7; color: #1a5289; }
   .badge-completed { background: #e6e6e6; color: #666; }
+  .badge-hold-held { background: #d0e6f7; color: #1a5289; }
+  .badge-hold-released { background: #d4edda; color: #1e5c2c; }
+  .badge-hold-captured { background: #f8d7da; color: #842029; }
+  .badge-hold-none { background: #f1f1f1; color: #888; }
+  .badge-hold-sent { background: #fff3cd; color: #7a5c00; }
   .pipeline-actions { margin-top: 10px; display: flex; gap: 6px; flex-wrap: wrap; }
   .pipeline-actions .btn.small { margin: 0; }
   .pipeline-actions a.btn.small { text-decoration: none; display: inline-block; }
@@ -63,7 +68,7 @@
 
   <div id="adminPanel">
     <h2>Booking pipeline</h2>
-    <div class="hint">Every booking, from first request through to deposit held. Generate the signing link for new requests, copy the deposit link to send when you're ready, jump to the hold in Stripe, or send check-in instructions.</div>
+    <div class="hint">Every booking, from first request through to deposit held, soonest stay first. Generate the signing link for new requests, email the guest their security hold link when you're ready, jump to the hold in Stripe, or send check-in instructions. The hold badge updates automatically when Stripe releases or captures the hold.</div>
     <div id="pipelineList"><div class="hint">Loading…</div></div>
 
     <h2>Upcoming check-ins (from calendar)</h2>
@@ -119,6 +124,18 @@ function pipelineBadge(status) {
   var map = { 'Requested': 'badge-requested', 'Signed': 'badge-signed', 'Deposit Held': 'badge-deposit', 'Completed': 'badge-completed', 'Archived': 'badge-completed' };
   return '<span class="badge ' + (map[status] || 'badge-requested') + '">' + (status || 'Unknown') + '</span>';
 }
+function holdBadge(b) {
+  // Stripe hold lifecycle, written to the sheet by the Stripe webhook:
+  //   (nothing) → 'Link sent' → 'Held' → 'Released' (refunded to guest) or 'Captured' (charged for damage)
+  var st = (b.holdStatus || '').toLowerCase();
+  var when = b.holdUpdated ? ' ' + b.holdUpdated : '';
+  if (st === 'released') return '<span class="badge badge-hold-released">Hold released' + when + '</span>';
+  if (st === 'captured') return '<span class="badge badge-hold-captured">Hold captured' + when + '</span>';
+  if (st === 'held' || b.status === 'Deposit Held') return '<span class="badge badge-hold-held">Hold active' + when + '</span>';
+  if (b.holdLinkSent) return '<span class="badge badge-hold-sent">Hold link sent ' + b.holdLinkSent + '</span>';
+  if (b.status === 'Signed') return '<span class="badge badge-hold-none">Hold link not sent</span>';
+  return '';
+}
 function pipelineDepositLink(b) {
   var data = { bookingId: b.bookingId, licenseeName: b.guestName, checkin: b.checkin, checkout: b.checkout, bond: b.bond, licenseeEmail: b.email };
   return 'https://eflare17.github.io/howqua-licence/deposit-hold.html#data=' + encodeURIComponent(b64EncodeUnicode(JSON.stringify(data)));
@@ -138,11 +155,22 @@ function pipelineStatus(id, msg, ok) {
   var el = document.getElementById('pstatus-' + id);
   if (el) { el.textContent = msg; el.style.color = ok ? '#2b5540' : '#a33'; }
 }
+// turn whatever text check-in date was entered (e.g. "12 Sep 2026, 3:00pm") into YYYY-MM-DD for sorting
+function toIso(text) {
+  if (!text) return '';
+  var m = String(text).match(/(\d{1,2})[\/\-\s]+([A-Za-z]{3,}|\d{1,2})[\/\-\s]+(\d{4})/);
+  if (!m) { var d = new Date(text); return isNaN(d) ? '' : d.toISOString().slice(0, 10); }
+  var months = { jan:1,feb:2,mar:3,apr:4,may:5,jun:6,jul:7,aug:8,sep:9,oct:10,nov:11,dec:12 };
+  var mon = isNaN(m[2]) ? months[m[2].slice(0,3).toLowerCase()] : parseInt(m[2], 10);
+  if (!mon) return '';
+  return m[3] + '-' + ('0' + mon).slice(-2) + '-' + ('0' + m[1]).slice(-2);
+}
 function renderPipeline(bookings) {
   var list = document.getElementById('pipelineList');
   var visible = bookings.filter(function (b) { return b.status !== 'Archived'; });
   // server gives an ISO check-in date, so sorting is reliable regardless of how the date was typed
-  visible.sort(function (a, b) { return (a.checkinIso || '9999').localeCompare(b.checkinIso || '9999'); });
+  visible.forEach(function (b) { b._sortKey = b.checkinIso || toIso(b.checkin) || '9999'; });
+  visible.sort(function (a, b) { return a._sortKey.localeCompare(b._sortKey); });
   var active = visible.filter(function (b) { return !b.isPast; });
   var past = visible.filter(function (b) { return b.isPast; });
   list.innerHTML = '';
@@ -155,7 +183,7 @@ function renderPipeline(bookings) {
         '<div class="pipeline-name">' + b.guestName + '</div>' +
         '<div class="pipeline-meta">' + (b.checkin || '?') + ' → ' + (b.checkout || '?') + (b.bond ? ' · ' + b.bond : '') + (b.email ? ' · ' + b.email : '') + '</div>' +
         '<div class="pipeline-id">' + b.bookingId + '</div>' +
-      '</div>' + pipelineBadge(b.status) + '</div>' +
+      '</div><div style="text-align:right;">' + pipelineBadge(b.status) + '<div style="margin-top:5px;">' + holdBadge(b) + '</div></div></div>' +
       '<div class="pipeline-actions"></div>' +
       '<div class="pipeline-status" id="pstatus-' + b.bookingId + '"></div>';
     var actions = card.querySelector('.pipeline-actions');
@@ -175,11 +203,30 @@ function renderPipeline(bookings) {
       });
       actions.appendChild(genBtn);
     }
+    if (b.status === 'Signed' && b.email) {
+      // email the security hold link straight from here — no copy/paste needed
+      var holdBtn = document.createElement('button');
+      holdBtn.className = 'btn small'; holdBtn.type = 'button';
+      holdBtn.textContent = b.holdLinkSent ? 'Resend hold link' : 'Email hold link';
+      holdBtn.addEventListener('click', function () {
+        if (!confirm('Email the security hold link to ' + b.guestName + ' (' + b.email + ')?')) return;
+        holdBtn.disabled = true; pipelineStatus(b.bookingId, 'Sending…', true);
+        var fd = new FormData();
+        fd.append('type', 'send-hold-link'); fd.append('password', password);
+        fd.append('bookingId', b.bookingId); fd.append('depositLink', pipelineDepositLink(b));
+        fetch(SCRIPT_URL, { method: 'POST', body: fd }).then(function (r) { return r.json(); }).then(function (res) {
+          pipelineStatus(b.bookingId, res.message || (res.success ? '✓ Hold link emailed.' : 'Failed.'), res.success);
+          holdBtn.disabled = false;
+          if (res.success) loadPipeline();
+        }).catch(function (e) { pipelineStatus(b.bookingId, 'Could not send: ' + e.message, false); holdBtn.disabled = false; });
+      });
+      actions.appendChild(holdBtn);
+    }
     if (b.status === 'Signed' || b.status === 'Deposit Held') {
       var depBtn = document.createElement('button');
-      depBtn.className = 'btn small'; depBtn.type = 'button'; depBtn.textContent = 'Copy deposit link';
+      depBtn.className = 'btn small'; depBtn.type = 'button'; depBtn.textContent = 'Copy hold link';
       depBtn.addEventListener('click', function () {
-        copyWithFallback(pipelineDepositLink(b), b.bookingId, '✓ Deposit link copied — send it to the guest when you\'re ready.');
+        copyWithFallback(pipelineDepositLink(b), b.bookingId, '✓ Hold link copied — send it to the guest when you\'re ready.');
       });
       actions.appendChild(depBtn);
     }

@@ -42,6 +42,22 @@
     font-size: 14px; font-family: Arial, sans-serif; line-height: 1.5;
   }
   input:disabled, textarea:disabled { background: #f0efe9; color: #333; border-color: #ddd; }
+  /* PDF capture mode — the signed document is always rendered at a fixed desktop width so the
+     PDF looks identical from a phone or a laptop, and live form controls are swapped for plain
+     text so html2canvas can't clip them */
+  body.pdf-mode { padding: 0; }
+  body.pdf-mode .sheet { width: 760px; max-width: 760px; min-width: 760px; margin: 0; box-shadow: none; border-radius: 0; }
+  body.pdf-mode #sheet input:not([type="hidden"]), body.pdf-mode #sheet textarea,
+  body.pdf-mode .pdf-hide, body.pdf-mode .sig-controls, body.pdf-mode .guest-banner,
+  body.pdf-mode #verifyNotice, body.pdf-mode #guestActions, body.pdf-mode #adminActions { display: none !important; }
+  .pdf-value { display: none; }
+  body.pdf-mode .pdf-value {
+    display: block; width: 100%; padding: 8px 10px; border: 1px solid #ddd; border-radius: 4px;
+    background: #f0efe9; color: #333; font-size: 14px; font-family: Arial, sans-serif; line-height: 1.5;
+    min-height: 38px; white-space: pre-wrap; word-break: break-word;
+  }
+  body.pdf-mode img.pdf-sig { display: block; }
+  img.pdf-sig { display: none; }
   textarea { resize: vertical; min-height: 70px; }
   #rulesBox { min-height: 110px; }
   .setup-box {
@@ -150,7 +166,7 @@
         <input type="text" id="licensor" value="Kimberley Turner">
       </div>
     </div>
-    <div style="background:#f4f1ea; border-left:4px solid #2b5540; padding:9px 13px; margin:0 0 10px; font-family:Arial,sans-serif; font-size:13px; font-weight:bold; color:#2b2b2b;">Name must match the name on your driver's licence or national ID card</div>
+    <div class="pdf-hide" style="background:#f4f1ea; border-left:4px solid #2b5540; padding:9px 13px; margin:0 0 10px; font-family:Arial,sans-serif; font-size:13px; font-weight:bold; color:#2b2b2b;">Name must match the name on your driver's licence or national ID card</div>
     <div class="field-row">
       <div class="field">
         <label>Licensee (Guest) First Name</label>
@@ -583,6 +599,7 @@ if (hash.startsWith('#data=')) {
     img.className = 'sigImg';
     img.id = 'licensorSigImg';
     img.onload = () => {
+      img.onload = null; // fire once — the src is swapped again later (letterboxing for the PDF) and that must not add a second caption
       licensorCanvas.replaceWith(img);
       document.getElementById('licensorSigControls').style.display = 'none';
       document.getElementById('setupBox').style.display = 'none';
@@ -771,9 +788,13 @@ document.getElementById('submitBtn').addEventListener('click', async () => {
     });
   }
 
+  // switch the page into fixed-width PDF layout before measuring anything
+  enterPdfMode();
+  await new Promise(resolve => requestAnimationFrame(resolve));
+
   // html2canvas doesn't respect object-fit: contain, so pre-bake the signature
   // thumbnail to its exact on-screen box before capturing, avoiding a squish
-  for (const previewId of ['licensorSigImg']) {
+  for (const previewId of ['licensorSigImg', 'guestSigPdfImg']) {
     const previewImg = document.getElementById(previewId);
     if (previewImg && previewImg.src) {
       const rect = previewImg.getBoundingClientRect();
@@ -880,6 +901,7 @@ document.getElementById('submitBtn').addEventListener('click', async () => {
       }
       placeBlock(block);
     });
+    exitPdfMode();
 
     const filename = 'Licence-to-Occupy-' + licenseeName.replace(/\s+/g, '-') + '.pdf';
     const pdfBlob = pdf.output('blob');
@@ -970,9 +992,42 @@ document.getElementById('submitBtn').addEventListener('click', async () => {
       setStatus('Your details were signed, but sending the email failed (' + err.message + '). Please contact the owner directly.', '#a33');
     }
   } catch (err) {
+    exitPdfMode();
     setStatus('Error: ' + err.message, '#a33');
   }
 });
+
+// ---------- PDF capture mode ----------
+// Swap every visible input/textarea for a static text block showing its value, freeze the guest
+// signature canvas as an image (a width change would otherwise stretch the strokes), and force
+// the sheet to a fixed 760px width. Everything is undone by exitPdfMode().
+function enterPdfMode() {
+  document.querySelectorAll('#sheet input:not([type="hidden"]), #sheet textarea').forEach(el => {
+    if (getComputedStyle(el).display === 'none') return;
+    const v = document.createElement('div');
+    v.className = 'pdf-value';
+    v.textContent = el.value || '\u00a0';
+    el.insertAdjacentElement('afterend', v);
+  });
+  const gc = document.getElementById('sigPadGuest');
+  if (gc && gc.width && gc.height) {
+    const img = document.createElement('img');
+    img.className = 'sigImg pdf-sig';
+    img.id = 'guestSigPdfImg';
+    img.src = gc.toDataURL('image/png');
+    gc.insertAdjacentElement('afterend', img);
+    gc.classList.add('pdf-hide');
+  }
+  document.body.classList.add('pdf-mode');
+  window.scrollTo(0, 0);
+}
+function exitPdfMode() {
+  if (!document.body.classList.contains('pdf-mode')) return;
+  document.body.classList.remove('pdf-mode');
+  document.querySelectorAll('.pdf-value, #guestSigPdfImg').forEach(el => el.remove());
+  const gc = document.getElementById('sigPadGuest');
+  if (gc) gc.classList.remove('pdf-hide');
+}
 </script>
 <script id="keep-signer-in-place">
   /* After submitting, the page collapses and the browser dumps the signer back
