@@ -947,7 +947,7 @@ document.getElementById('submitBtn').addEventListener('click', async () => {
       licenseeEmail: document.getElementById('licenseeEmail').value.trim()
     };
     const depositLinkEncoded = encodeURIComponent(b64EncodeUnicode(JSON.stringify(depositLinkData)));
-    const depositLink = 'https://eflare17.github.io/howqua-licence/deposit-hold.html#data=' + depositLinkEncoded;
+    const depositLink = 'https://book.howquahideaway.com.au/deposit-hold.html#data=' + depositLinkEncoded;
     sendForm.append('bookingId', currentBookingId);
     sendForm.append('depositLinkForKim', depositLink);
     sendForm.append('pdfBase64', pdfBase64);

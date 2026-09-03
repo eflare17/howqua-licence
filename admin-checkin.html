@@ -157,7 +157,7 @@ function idBadge(b) {
 }
 function pipelineDepositLink(b) {
   var data = { bookingId: b.bookingId, licenseeName: b.guestName, checkin: b.checkin, checkout: b.checkout, bond: b.bond, licenseeEmail: b.email };
-  return 'https://eflare17.github.io/howqua-licence/deposit-hold.html#data=' + encodeURIComponent(b64EncodeUnicode(JSON.stringify(data)));
+  return 'https://book.howquahideaway.com.au/deposit-hold.html#data=' + encodeURIComponent(b64EncodeUnicode(JSON.stringify(data)));
 }
 function copyWithFallback(text, bookingId, okMsg) {
   var done = function () { pipelineStatus(bookingId, okMsg, true); };
