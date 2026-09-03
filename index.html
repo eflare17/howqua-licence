@@ -693,16 +693,37 @@ document.getElementById('genLinkBtn').addEventListener('click', () => {
 
   const linkOut = document.getElementById('linkOut');
   linkOut.style.display = 'block';
-  document.getElementById('shortenBar').style.display = 'block';
-
-  navigator.clipboard.writeText(link).then(() => {
-    linkOut.textContent = '✓ Link copied to clipboard (' + link.length + ' characters) — send this to the guest:\n' + link;
-  }).catch(() => {
-    linkOut.textContent = link;
-  });
-
+  document.getElementById('shortenBar').style.display = 'none';
+  linkOut.textContent = link;
   adminStatus.style.color = '#2b5540';
-  adminStatus.textContent = 'Link generated.';
+  adminStatus.textContent = 'Creating short link...';
+
+  // shorten automatically; fall back to the full link (and show the manual button) if it fails
+  (async () => {
+    try {
+      const form = new FormData();
+      form.append('type', 'shorten');
+      form.append('longUrl', link);
+      const resp = await fetch(APPS_SCRIPT_URL, { method: 'POST', body: form });
+      const result = await resp.json();
+      if (result.success && result.shortUrl) {
+        navigator.clipboard.writeText(result.shortUrl).then(() => {
+          linkOut.textContent = '✓ Short link copied to clipboard — send this to the guest:\n' + result.shortUrl;
+        }).catch(() => {
+          linkOut.textContent = result.shortUrl;
+        });
+        adminStatus.textContent = 'Link generated.';
+        return;
+      }
+      throw new Error(result.message || 'unknown error');
+    } catch (err) {
+      navigator.clipboard.writeText(link).catch(() => {});
+      linkOut.textContent = '✓ Full link copied to clipboard — send this to the guest:\n' + link;
+      document.getElementById('shortenBar').style.display = 'block';
+      adminStatus.style.color = '#a33';
+      adminStatus.textContent = 'Could not create a short link (' + err.message + '). The full link still works — or try "Shorten this link" again.';
+    }
+  })();
 });
 
 // ---------- html2canvas loader ----------
