@@ -95,6 +95,14 @@
     <label>Contact phone shown in emails (optional)</label>
     <input id="f_contactPhone" style="max-width:240px;">
     <button class="btn" id="saveBtn" type="button">Save instructions</button>
+
+    <h2>Security hold email</h2>
+    <div class="hint">This is the email the "Email hold link" button sends. You can use these placeholders and they'll be filled in for each guest: [FIRST_NAME], [NAME], [CHECKIN], [CHECKOUT], [AMOUNT], [LINK]. The [LINK] is added automatically at the end if you leave it out.</div>
+    <label>Subject</label>
+    <input id="h_subject">
+    <label>Message</label>
+    <textarea id="h_body" style="min-height:220px;"></textarea>
+    <button class="btn" id="saveHoldBtn" type="button">Save hold email</button>
   </div>
   <div id="status"></div>
 </div>
@@ -318,6 +326,7 @@ function load() {
     document.getElementById('loginPanel').style.display = 'none';
     document.getElementById('adminPanel').style.display = 'block';
     FIELD_IDS.forEach(function (k) { document.getElementById('f_' + k).value = res.content[k] || ''; });
+    if (res.holdEmail) { document.getElementById('h_subject').value = res.holdEmail.subject || ''; document.getElementById('h_body').value = res.holdEmail.body || ''; }
     renderBookings(res.bookings || []);
     loadPipeline();
     setStatus('', true);
@@ -358,6 +367,11 @@ function buildSheetForImage(content) {
   document.body.appendChild(d);
   return d;
 }
+document.getElementById('saveHoldBtn').addEventListener('click', function () {
+  setStatus('Saving hold email…', true);
+  api({ sub: 'save-hold-email', subject: document.getElementById('h_subject').value, body: document.getElementById('h_body').value })
+    .then(function (res) { setStatus(res.message, res.success); });
+});
 document.getElementById('saveBtn').addEventListener('click', function () {
   var content = {};
   FIELD_IDS.forEach(function (k) { content[k] = document.getElementById('f_' + k).value; });
