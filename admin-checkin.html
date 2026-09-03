@@ -55,6 +55,18 @@
     input:not([type="checkbox"]):not([type="radio"]), select, textarea { font-size: 16px; }
     select { width: 100%; max-width: 100%; }
   }
+
+  /* Check-ins table: stack each booking as a block on narrow screens so the Send button never runs off the page */
+  @media (max-width: 700px) {
+    .sheet { padding: 24px 16px; }
+    table.checkins thead { display: none; }
+    table.checkins, table.checkins tbody, table.checkins tr, table.checkins td { display: block; width: 100%; }
+    table.checkins tr { border: 1px solid #e2ddd0; border-radius: 6px; padding: 10px 12px; margin-bottom: 10px; background: #fdfcfa; }
+    table.checkins td { border: none; padding: 3px 0; word-break: break-word; }
+    table.checkins td[data-label]::before { content: attr(data-label) ": "; color: #777; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; }
+    table.checkins td.actions { padding-top: 8px; }
+    table.checkins td.actions .btn.small { width: 100%; padding: 10px; font-size: 14px; }
+  }
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 </head>
@@ -76,10 +88,19 @@
 
     <h2>Upcoming check-ins (from calendar)</h2>
     <div class="hint">Bookings come from the calendar (added automatically when a licence is signed). "Send now" emails the guest their check-in instructions immediately.</div>
-    <table>
+    <table class="checkins">
       <thead><tr><th>Guest</th><th>Check-in</th><th>Email</th><th>Check-in email</th><th></th></tr></thead>
       <tbody id="bookingRows"><tr><td colspan="5">Loading…</td></tr></tbody>
     </table>
+
+    <h2>Security hold email</h2>
+    <div class="hint">This is the email the "Email hold link" button sends. You can use these placeholders and they'll be filled in for each guest: [FIRST_NAME], [NAME], [CHECKIN], [CHECKOUT], [AMOUNT], [LINK]. The [LINK] is added automatically at the end if you leave it out.</div>
+    <label>Subject</label>
+    <input id="h_subject">
+    <label>Message</label>
+    <textarea id="h_body" style="min-height:220px;"></textarea>
+    <button class="btn" id="saveHoldBtn" type="button">Save hold email</button>
+
 
     <h2>Check-in instructions</h2>
     <div class="hint">These feed both the guest page and the check-in emails. One line per bullet point. Use [CODE] wherever the lockbox code should appear — the real code is only ever shown in emails and links sent to guests.</div>
@@ -99,13 +120,6 @@
     <input id="f_contactPhone" style="max-width:240px;">
     <button class="btn" id="saveBtn" type="button">Save instructions</button>
 
-    <h2>Security hold email</h2>
-    <div class="hint">This is the email the "Email hold link" button sends. You can use these placeholders and they'll be filled in for each guest: [FIRST_NAME], [NAME], [CHECKIN], [CHECKOUT], [AMOUNT], [LINK]. The [LINK] is added automatically at the end if you leave it out.</div>
-    <label>Subject</label>
-    <input id="h_subject">
-    <label>Message</label>
-    <textarea id="h_body" style="min-height:220px;"></textarea>
-    <button class="btn" id="saveHoldBtn" type="button">Save hold email</button>
   </div>
   <div id="status"></div>
 </div>
@@ -245,7 +259,18 @@ function renderPipeline(bookings) {
       var depBtn = document.createElement('button');
       depBtn.className = 'btn small'; depBtn.type = 'button'; depBtn.textContent = 'Copy hold link';
       depBtn.addEventListener('click', function () {
-        copyWithFallback(pipelineDepositLink(b), b.bookingId, '✓ Hold link copied — send it to the guest when you\'re ready.');
+        // shorten to a book.howquahideaway.com.au link first; fall back to the full link if that fails
+        var longLink = pipelineDepositLink(b);
+        depBtn.disabled = true; pipelineStatus(b.bookingId, 'Creating short link…', true);
+        var fd = new FormData();
+        fd.append('type', 'shorten'); fd.append('longUrl', longLink);
+        fetch(SCRIPT_URL, { method: 'POST', body: fd }).then(function (r) { return r.json(); }).then(function (res) {
+          depBtn.disabled = false;
+          copyWithFallback((res.success && res.shortUrl) ? res.shortUrl : longLink, b.bookingId, '✓ Hold link copied — send it to the guest when you\'re ready.');
+        }).catch(function () {
+          depBtn.disabled = false;
+          copyWithFallback(longLink, b.bookingId, '✓ Hold link copied (full-length — shortener unavailable).');
+        });
       });
       actions.appendChild(depBtn);
     }
@@ -320,8 +345,8 @@ function renderBookings(bookings) {
   tbody.innerHTML = '';
   bookings.forEach(function (b) {
     var tr = document.createElement('tr');
-    tr.innerHTML = '<td>' + b.guestName + '</td><td>' + b.checkin + '</td><td>' + (b.guestEmail || '—') + '</td>' +
-      '<td class="' + (b.sent ? 'sent-yes' : 'sent-no') + '">' + (b.sent ? 'Sent ✓' : 'Not sent') + '</td><td></td>';
+    tr.innerHTML = '<td data-label="Guest">' + b.guestName + '</td><td data-label="Check-in">' + b.checkin + '</td><td data-label="Email">' + (b.guestEmail || '—') + '</td>' +
+      '<td data-label="Check-in email" class="' + (b.sent ? 'sent-yes' : 'sent-no') + '">' + (b.sent ? 'Sent ✓' : 'Not sent') + '</td><td class="actions"></td>';
     var btn = document.createElement('button');
     btn.className = 'btn small'; btn.type = 'button';
     btn.textContent = b.sent ? 'Send again' : 'Send now';
