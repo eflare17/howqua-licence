@@ -94,6 +94,11 @@ if (urlParams.get('paid') === 'true') {
   holdStatus.style.color = '#2b5540';
   holdStatus.textContent = '✓ Incidental security hold authorized. You can close this page now.';
 
+  // only notify once per session — a refresh of this page shouldn't re-email Kim
+  const notifiedKey = 'notified_' + (urlParams.get('session_id') || '');
+  const alreadyNotified = (function () { try { return sessionStorage.getItem(notifiedKey); } catch (e) { return null; } })();
+  if (!alreadyNotified) {
+  try { sessionStorage.setItem(notifiedKey, '1'); } catch (e) {}
   const notifyForm = new FormData();
   notifyForm.append('type', 'notify-deposit-authorized');
   notifyForm.append('bookingId', bookingData.bookingId || '');
@@ -101,6 +106,7 @@ if (urlParams.get('paid') === 'true') {
   notifyForm.append('bond', bookingData.bond || '');
   notifyForm.append('bondHoldRef', urlParams.get('session_id') || '');
   fetch(APPS_SCRIPT_URL, { method: 'POST', body: notifyForm }).catch(() => {});
+  }
 }
 
 document.getElementById('authorizeBondBtn').addEventListener('click', async () => {

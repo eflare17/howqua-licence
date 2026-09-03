@@ -116,12 +116,23 @@ function b64EncodeUnicode(str) {
   return btoa(encodeURIComponent(str).replace(/%([0-9A-F]{2})/g, function (m, p1) { return String.fromCharCode('0x' + p1); }));
 }
 function pipelineBadge(status) {
-  var map = { 'Requested': 'badge-requested', 'Signed': 'badge-signed', 'Deposit Held': 'badge-deposit', 'Completed': 'badge-completed' };
+  var map = { 'Requested': 'badge-requested', 'Signed': 'badge-signed', 'Deposit Held': 'badge-deposit', 'Completed': 'badge-completed', 'Archived': 'badge-completed' };
   return '<span class="badge ' + (map[status] || 'badge-requested') + '">' + (status || 'Unknown') + '</span>';
 }
 function pipelineDepositLink(b) {
   var data = { bookingId: b.bookingId, licenseeName: b.guestName, checkin: b.checkin, checkout: b.checkout, bond: b.bond, licenseeEmail: b.email };
   return 'https://eflare17.github.io/howqua-licence/deposit-hold.html#data=' + encodeURIComponent(b64EncodeUnicode(JSON.stringify(data)));
+}
+function copyWithFallback(text, bookingId, okMsg) {
+  var done = function () { pipelineStatus(bookingId, okMsg, true); };
+  var fallback = function () {
+    // clipboard blocked (common on phones) — show the link so it can be long-pressed and copied
+    var el = document.getElementById('pstatus-' + bookingId);
+    if (el) { el.style.color = '#2b5540'; el.innerHTML = 'Copy this link: <input readonly value="' + text.replace(/"/g, '&quot;') + '" style="width:100%; font-size:11px; margin-top:4px;" onclick="this.select()">'; }
+  };
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(done).catch(fallback);
+  } else { fallback(); }
 }
 function pipelineStatus(id, msg, ok) {
   var el = document.getElementById('pstatus-' + id);
@@ -129,11 +140,14 @@ function pipelineStatus(id, msg, ok) {
 }
 function renderPipeline(bookings) {
   var list = document.getElementById('pipelineList');
-  var active = bookings.filter(function (b) { return b.status !== 'Completed'; });
-  active.sort(function (a, b) { return new Date(a.checkin) - new Date(b.checkin); });
-  if (!active.length) { list.innerHTML = '<div class="hint">No bookings in the pipeline yet.</div>'; return; }
+  var visible = bookings.filter(function (b) { return b.status !== 'Archived'; });
+  // server gives an ISO check-in date, so sorting is reliable regardless of how the date was typed
+  visible.sort(function (a, b) { return (a.checkinIso || '9999').localeCompare(b.checkinIso || '9999'); });
+  var active = visible.filter(function (b) { return !b.isPast; });
+  var past = visible.filter(function (b) { return b.isPast; });
   list.innerHTML = '';
-  active.forEach(function (b) {
+  if (!active.length) list.innerHTML = '<div class="hint">No upcoming bookings in the pipeline.</div>';
+  var renderCard = function (b, container) {
     var card = document.createElement('div');
     card.className = 'pipeline-card';
     card.innerHTML =
@@ -155,8 +169,7 @@ function renderPipeline(bookings) {
           .then(function (r) { return r.json(); })
           .then(function (res) {
             if (!res.success) { pipelineStatus(b.bookingId, res.message, false); genBtn.disabled = false; return; }
-            navigator.clipboard.writeText(res.link).catch(function () {});
-            pipelineStatus(b.bookingId, '✓ Signing link copied — open it, review, sign, then generate the guest link.', true);
+            copyWithFallback(res.link, b.bookingId, '✓ Signing link copied — open it, review, sign, then generate the guest link.');
             genBtn.disabled = false;
           });
       });
@@ -166,8 +179,7 @@ function renderPipeline(bookings) {
       var depBtn = document.createElement('button');
       depBtn.className = 'btn small'; depBtn.type = 'button'; depBtn.textContent = 'Copy deposit link';
       depBtn.addEventListener('click', function () {
-        navigator.clipboard.writeText(pipelineDepositLink(b)).catch(function () {});
-        pipelineStatus(b.bookingId, '✓ Deposit link copied — send it to the guest when you\'re ready.', true);
+        copyWithFallback(pipelineDepositLink(b), b.bookingId, '✓ Deposit link copied — send it to the guest when you\'re ready.');
       });
       actions.appendChild(depBtn);
     }
@@ -175,7 +187,7 @@ function renderPipeline(bookings) {
       var stripeLink = document.createElement('a');
       stripeLink.className = 'btn small'; stripeLink.target = '_blank'; stripeLink.textContent = 'View in Stripe';
       // account ID pinned so it always opens Howqua's Stripe account, even if another account is active in the browser
-      stripeLink.href = 'https://dashboard.stripe.com/acct_1U7YnNIvavyq88hu/test/payments/' + b.stripeReference; // remove /test/ once live
+      stripeLink.href = 'https://dashboard.stripe.com/acct_1U7YnNIvavyq88hu/payments/' + b.stripeReference; // live mode — add /test/ back before /payments/ if ever switched to test keys
       actions.appendChild(stripeLink);
     }
     if (b.calendarEventId) {
@@ -193,8 +205,32 @@ function renderPipeline(bookings) {
       });
       actions.appendChild(ciBtn);
     }
-    list.appendChild(card);
-  });
+    if (b.status === 'Requested' || b.isPast) {
+      var archBtn = document.createElement('button');
+      archBtn.className = 'btn small'; archBtn.type = 'button'; archBtn.style.background = '#888';
+      archBtn.textContent = b.isPast ? 'Archive' : 'Decline / archive';
+      archBtn.addEventListener('click', function () {
+        if (!confirm('Archive ' + b.guestName + '\'s booking? It will be hidden from this list (the record stays in the sheet).')) return;
+        archBtn.disabled = true;
+        var fd = new FormData();
+        fd.append('type', 'archive-booking'); fd.append('password', password); fd.append('bookingId', b.bookingId);
+        fetch(SCRIPT_URL, { method: 'POST', body: fd }).then(function (r) { return r.json(); }).then(function (res) {
+          if (res.success) loadPipeline(); else { pipelineStatus(b.bookingId, res.message, false); archBtn.disabled = false; }
+        });
+      });
+      actions.appendChild(archBtn);
+    }
+    container.appendChild(card);
+  };
+  active.forEach(function (b) { renderCard(b, list); });
+  if (past.length) {
+    var det = document.createElement('details');
+    det.innerHTML = '<summary class="hint" style="cursor:pointer; margin-top:10px;">Past stays (' + past.length + ')</summary>';
+    var pastWrap = document.createElement('div'); pastWrap.style.marginTop = '8px';
+    past.forEach(function (b) { renderCard(b, pastWrap); });
+    det.appendChild(pastWrap);
+    list.appendChild(det);
+  }
 }
 function loadPipeline() {
   fetch(SCRIPT_URL + '?action=get-bookings&password=' + encodeURIComponent(password))
