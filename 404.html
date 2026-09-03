@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Howqua Hideaway</title>
+<style>
+  body { margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center; background: #f4f1ea; color: #2b2b2b; font-family: Georgia, serif; text-align: center; padding: 20px; box-sizing: border-box; }
+  .box { max-width: 420px; }
+  h1 { color: #2b5540; font-size: 22px; letter-spacing: 1px; margin: 0 0 12px; }
+  p { font-family: Arial, sans-serif; font-size: 14px; color: #555; line-height: 1.5; }
+  a { color: #2b5540; }
+</style>
+</head>
+<body>
+<div class="box">
+  <h1>HOWQUA HIDEAWAY</h1>
+  <p id="msg">One moment — opening your link…</p>
+</div>
+<script>
+(function () {
+  // Short links: book.howquahideaway.com.au/x7k2p9 -> ask the script where that code points, then go there.
+  var SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyC4GkZR3bs8Wj2zg8z2oBrsn2JBdoxE0Jcasp298k_QJ8kwzsjKh7mciabOJNSjSVV/exec';
+  var msg = document.getElementById('msg');
+  var code = location.pathname.replace(/^\/+|\/+$/g, '');
+
+  function notFound() {
+    msg.innerHTML = 'Sorry, that link doesn\'t seem to work. Please check it, or email <a href="mailto:howquahideaway@gmail.com">howquahideaway@gmail.com</a> and we\'ll sort it out.';
+  }
+
+  if (!code || /[^A-Za-z0-9]/.test(code) || code.length > 12) { notFound(); return; }
+
+  fetch(SCRIPT_URL + '?action=resolve&code=' + encodeURIComponent(code))
+    .then(function (r) { return r.json(); })
+    .then(function (d) {
+      if (d && d.success && d.url && /^https?:\/\//.test(d.url)) location.replace(d.url);
+      else notFound();
+    })
+    .catch(notFound);
+})();
+</script>
+</body>
+</html>
