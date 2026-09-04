@@ -459,7 +459,7 @@ function renderPipeline(bookings) {
       diditLink.title = b.diditSessionId ? 'Didit session ' + b.diditSessionId : 'Open the Didit console';
       actions.appendChild(diditLink);
     }
-    if (b.status === 'Signed' && b.email) {
+    if ((b.status === 'Signed' || b.status === 'Deposit Held') && b.email) {
       // email the security hold link straight from here — no copy/paste needed
       var holdBtn = document.createElement('button');
       holdBtn.className = 'btn small'; holdBtn.type = 'button';
@@ -478,7 +478,7 @@ function renderPipeline(bookings) {
       });
       actions.appendChild(holdBtn);
     }
-    if (b.status === 'Signed' && !b.email) {
+    if ((b.status === 'Signed' || b.status === 'Deposit Held') && !b.email) {
       // no email on this booking, so the link has to be passed on by hand
       var depBtn = document.createElement('button');
       depBtn.className = 'btn small'; depBtn.type = 'button'; depBtn.textContent = 'Copy hold link';
