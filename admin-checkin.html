@@ -67,6 +67,25 @@
   .pipeline-card.settled .btn.small { background: #fff; color: #5a6b60; border: 1px solid #c9cdc7; }
   /* Arriving soon and still not signed — the only thing here that actually needs chasing */
   .pipeline-card.urgent { border-left-color: #a33; background: #fdf7f7; }
+
+  /* --- Loading bunny --- runs across the pipeline area until the bookings arrive */
+  .bunny-run { padding: 6px 0 2px; }
+  .bunny-track { position: relative; height: 56px; overflow: hidden;
+    border-bottom: 2px solid #e2ddd0; margin-bottom: 8px; }
+  .bunny { position: absolute; bottom: 0; left: -80px; width: 64px; height: 44px;
+    animation: bunny-cross 3.2s linear infinite; }
+  .bunny svg { display: block; animation: bunny-hop 0.4s ease-in-out infinite; transform-origin: 50% 100%; }
+  @keyframes bunny-cross { from { left: -80px; } to { left: 100%; } }
+  @keyframes bunny-hop {
+    0%, 100% { transform: translateY(0) scaleY(1); }
+    30%      { transform: translateY(-11px) scaleY(1.04); }
+    60%      { transform: translateY(-4px) scaleY(1); }
+    85%      { transform: translateY(0) scaleY(0.94); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .bunny, .bunny svg { animation: none; }
+    .bunny { left: calc(50% - 32px); }
+  }
   .badge-requested { background: #fff3cd; color: #7a5c00; }
   .badge-signed { background: #d4edda; color: #1e5c2c; }
   .badge-deposit { background: #d0e6f7; color: #1a5289; }
@@ -119,7 +138,34 @@
   <div id="adminPanel">
     <h2>Booking pipeline</h2>
     <div class="hint">Every booking, soonest stay first. The bar on each card shows how far along it is; finished stays fade to grey, and anything arriving within a week that still is not signed turns red. Generate the signing link for new requests, email the guest their security hold link when you are ready, jump to the hold in Stripe, or send check-in instructions.</div>
-    <div id="pipelineList"><div class="hint">Loading…</div></div>
+    <div id="pipelineList">
+      <div class="bunny-run" aria-label="Loading bookings">
+        <div class="bunny-track">
+          <div class="bunny">
+            <svg viewBox="0 0 64 44" width="64" height="44" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+              <!-- ears -->
+              <ellipse cx="44" cy="10" rx="3.2" ry="9" fill="#e9dccb" stroke="#8a7a66" stroke-width="1.2" transform="rotate(-12 44 10)"/>
+              <ellipse cx="51" cy="11" rx="3.2" ry="9" fill="#e9dccb" stroke="#8a7a66" stroke-width="1.2" transform="rotate(10 51 11)"/>
+              <ellipse cx="44" cy="11" rx="1.4" ry="6" fill="#f3b8b8" transform="rotate(-12 44 11)"/>
+              <ellipse cx="51" cy="12" rx="1.4" ry="6" fill="#f3b8b8" transform="rotate(10 51 12)"/>
+              <!-- body -->
+              <ellipse cx="28" cy="30" rx="18" ry="11" fill="#f5efe4" stroke="#8a7a66" stroke-width="1.2"/>
+              <!-- head -->
+              <circle cx="46" cy="24" r="9.5" fill="#f5efe4" stroke="#8a7a66" stroke-width="1.2"/>
+              <!-- tail -->
+              <circle cx="10" cy="29" r="4" fill="#fff" stroke="#8a7a66" stroke-width="1.2"/>
+              <!-- eye & nose -->
+              <circle cx="50" cy="22" r="1.4" fill="#2b2b2b"/>
+              <ellipse cx="55" cy="26" rx="1.3" ry="0.9" fill="#d98a8a"/>
+              <!-- feet -->
+              <ellipse cx="18" cy="40" rx="6" ry="2.4" fill="#f5efe4" stroke="#8a7a66" stroke-width="1.2"/>
+              <ellipse cx="34" cy="40" rx="5" ry="2.2" fill="#f5efe4" stroke="#8a7a66" stroke-width="1.2"/>
+            </svg>
+          </div>
+        </div>
+        <div class="hint" style="text-align:center;">Fetching bookings…</div>
+      </div>
+    </div>
     <div id="sheetLinkWrap" style="margin-top:10px; display:none;"><a id="sheetLink" class="btn small" href="#" target="_blank" rel="noopener" style="text-decoration:none; display:inline-block;">Open bookings sheet</a> <span class="hint" style="display:inline; margin-left:6px;">for editing a booking's details directly</span></div>
 
     <h2>Upcoming check-ins (from calendar)</h2>
