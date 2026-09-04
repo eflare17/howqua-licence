@@ -281,9 +281,9 @@ function milestones(b) {
     requested: true, // the row existing IS the request
     signed:    b.status === 'Signed' || b.status === 'Deposit Held' || b.status === 'Completed' || !!b.signedOn,
     id:        idApproved(b),
-    hold:      hs === 'held' || holdIsFinal(b) || b.status === 'Deposit Held',
+    hold:      hs === 'held' || (holdIsFinal(b) && b.isPast) || (b.status === 'Deposit Held' && !holdIsFinal(b)),
     checkin:   !!b.checkinSent,
-    closed:    holdIsFinal(b) || b.status === 'Completed'
+    closed:    (holdIsFinal(b) && b.isPast) || b.status === 'Completed'
   };
 }
 // how far along it is, for the card's left edge colour
@@ -323,7 +323,7 @@ function milestoneTimes(b) {
     requested: b.requestedOn || '',
     signed:    b.signedOn || '',
     id:        (idApproved(b) || idDeclined(b)) ? (b.idUpdated || '') : '',
-    hold:      hs === 'held' ? (b.holdUpdated || '') : '', // once released, Hold Updated is the release time
+    hold:      hs === 'held' ? (b.holdUpdated || '') : '', // once released, Hold Updated is the release time, not the hold time
     checkin:   b.checkinSentOn || '',
     closed:    holdIsFinal(b) ? (b.holdUpdated || '') : ''
   };
@@ -395,7 +395,8 @@ function holdDetail(b) {
   var parts = [];
   var hs = (b.holdStatus || '').toLowerCase();
   // dates for held/released/captured now sit under the bar, so only say what the bar can't
-  if (!hs && b.holdLinkSent) parts.push('Hold link sent ' + shortDate(b.holdLinkSent) + ', not authorised yet');
+  if (holdIsFinal(b) && !b.isPast) parts.push('Hold was ' + hs + ' ' + shortDate(b.holdUpdated) + ' — a new hold is needed');
+  else if (!hs && b.holdLinkSent) parts.push('Hold link sent ' + shortDate(b.holdLinkSent) + ', not authorised yet');
   else if (!hs && b.status === 'Signed') parts.push('Hold link not sent yet');
 
   if (!idApproved(b) && !idDeclined(b) && (b.diditSessionId || b.idStatus)) parts.push('ID check started, not finished');
@@ -458,7 +459,7 @@ function renderPipeline(bookings) {
   if (!active.length) list.innerHTML = '<div class="hint">No upcoming bookings in the pipeline.</div>';
   var renderCard = function (b, container) {
     var card = document.createElement('div');
-    var settled = b.isPast || milestones(b).closed;
+    var settled = b.isPast && (b.holdStatus || '').toLowerCase() !== 'held';
     card.className = 'pipeline-card' + (settled ? ' settled' : '') + (isUrgent(b) ? ' urgent' : '');
     if (!settled && !isUrgent(b)) card.style.borderLeftColor = STAGES[stageIndex(b)].color;
     var detail = holdDetail(b);
@@ -499,7 +500,7 @@ function renderPipeline(bookings) {
       diditLink.title = b.diditSessionId ? 'Didit session ' + b.diditSessionId : 'Open the Didit console';
       actions.appendChild(diditLink);
     }
-    if ((b.status === 'Signed' || b.status === 'Deposit Held') && b.email && !holdIsFinal(b)) {
+    if ((b.status === 'Signed' || b.status === 'Deposit Held') && b.email && !(holdIsFinal(b) && b.isPast)) {
       // email the security hold link straight from here — no copy/paste needed
       var holdBtn = document.createElement('button');
       holdBtn.className = 'btn small'; holdBtn.type = 'button';
@@ -518,7 +519,7 @@ function renderPipeline(bookings) {
       });
       actions.appendChild(holdBtn);
     }
-    if ((b.status === 'Signed' || b.status === 'Deposit Held') && !b.email && !holdIsFinal(b)) {
+    if ((b.status === 'Signed' || b.status === 'Deposit Held') && !b.email && !(holdIsFinal(b) && b.isPast)) {
       // no email on this booking, so the link has to be passed on by hand
       var depBtn = document.createElement('button');
       depBtn.className = 'btn small'; depBtn.type = 'button'; depBtn.textContent = 'Copy hold link';
@@ -695,6 +696,7 @@ document.getElementById('saveBtn').addEventListener('click', function () {
   });
 });
 </script>
+
 <script>
 window.addEventListener('load', function(){
   document.getElementById('loginPanel').style.display='none';
@@ -702,13 +704,12 @@ window.addEventListener('load', function(){
   var iso=function(d){var t=new Date();t.setDate(t.getDate()+d);return t.toISOString().slice(0,10);};
   var fmt=function(d){var t=new Date();t.setDate(t.getDate()+d);return t.toLocaleDateString('en-AU',{day:'numeric',month:'short',year:'numeric'});};
   renderPipeline([
-    {bookingId:'HH-2026-A1',guestName:'ID approved, held',email:'a@example.com',bond:'$300.00',checkin:fmt(20),checkout:fmt(23),checkinIso:iso(20),
-     status:'Deposit Held',holdStatus:'Held',holdUpdated:'4 Sep 2026, 8:15PM',requestedOn:'28 Aug 2026, 10:02AM',signedOn:'2 Sep 2026, 6:40PM',
-     idStatus:'Approved',idUpdated:'2 Sep 2026, 6:55PM',diditSessionId:'x',calendarEventId:'e1'},
-    {bookingId:'HH-2026-B2',guestName:'ID declined, 5 days out',email:'b@example.com',bond:'$300.00',checkin:fmt(5),checkout:fmt(8),checkinIso:iso(5),
-     status:'Signed',requestedOn:'1 Sep 2026, 9:00AM',signedOn:'3 Sep 2026, 1:10PM',idStatus:'Declined',idUpdated:'3 Sep 2026, 1:30PM',diditSessionId:'y',calendarEventId:'e2'},
-    {bookingId:'HH-2026-C3',guestName:'Signed, ID started',email:'c@example.com',bond:'$300.00',checkin:fmt(30),checkout:fmt(33),checkinIso:iso(30),
-     status:'Signed',requestedOn:'1 Sep 2026, 9:00AM',signedOn:'3 Sep 2026, 1:10PM',idStatus:'Started',diditSessionId:'z',calendarEventId:'e3'}
+    {bookingId:'HH-2026-PBRTV9DP',guestName:'Future stay, hold released',email:'t@example.com',bond:'$300.00',checkin:fmt(49),checkout:fmt(52),checkinIso:iso(49),
+     status:'Deposit Held',holdStatus:'Released',holdUpdated:'4 Sep 2026, 8:20PM',requestedOn:'4 Sep 2026, 7:00PM',signedOn:'4 Sep 2026, 7:10PM',
+     idStatus:'In Progress',diditSessionId:'x',stripeReference:'pi_1',calendarEventId:'e1',checkinSent:true,checkinSentOn:'2026-09-04T10:00:00Z'},
+    {bookingId:'HH-2026-OLD',guestName:'Past stay, hold released',email:'o@example.com',bond:'$300.00',checkin:fmt(-20),checkout:fmt(-17),checkinIso:iso(-20),
+     status:'Deposit Held',holdStatus:'Released',holdUpdated:'20 Aug 2026, 9:00AM',requestedOn:'1 Aug 2026',signedOn:'2 Aug 2026',idStatus:'Approved',idUpdated:'2 Aug 2026',
+     stripeReference:'pi_2',calendarEventId:'e2',checkinSent:true,checkinSentOn:'2026-08-13T10:00:00Z',isPast:true}
   ]);
 });
 </script></body>

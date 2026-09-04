@@ -281,9 +281,9 @@ function milestones(b) {
     requested: true, // the row existing IS the request
     signed:    b.status === 'Signed' || b.status === 'Deposit Held' || b.status === 'Completed' || !!b.signedOn,
     id:        idApproved(b),
-    hold:      hs === 'held' || holdIsFinal(b) || b.status === 'Deposit Held',
+    hold:      hs === 'held' || (holdIsFinal(b) && b.isPast) || (b.status === 'Deposit Held' && !holdIsFinal(b)),
     checkin:   !!b.checkinSent,
-    closed:    holdIsFinal(b) || b.status === 'Completed'
+    closed:    (holdIsFinal(b) && b.isPast) || b.status === 'Completed'
   };
 }
 // how far along it is, for the card's left edge colour
@@ -323,7 +323,7 @@ function milestoneTimes(b) {
     requested: b.requestedOn || '',
     signed:    b.signedOn || '',
     id:        (idApproved(b) || idDeclined(b)) ? (b.idUpdated || '') : '',
-    hold:      hs === 'held' ? (b.holdUpdated || '') : '', // once released, Hold Updated is the release time
+    hold:      hs === 'held' ? (b.holdUpdated || '') : '', // once released, Hold Updated is the release time, not the hold time
     checkin:   b.checkinSentOn || '',
     closed:    holdIsFinal(b) ? (b.holdUpdated || '') : ''
   };
@@ -395,7 +395,8 @@ function holdDetail(b) {
   var parts = [];
   var hs = (b.holdStatus || '').toLowerCase();
   // dates for held/released/captured now sit under the bar, so only say what the bar can't
-  if (!hs && b.holdLinkSent) parts.push('Hold link sent ' + shortDate(b.holdLinkSent) + ', not authorised yet');
+  if (holdIsFinal(b) && !b.isPast) parts.push('Hold was ' + hs + ' ' + shortDate(b.holdUpdated) + ' — a new hold is needed');
+  else if (!hs && b.holdLinkSent) parts.push('Hold link sent ' + shortDate(b.holdLinkSent) + ', not authorised yet');
   else if (!hs && b.status === 'Signed') parts.push('Hold link not sent yet');
 
   if (!idApproved(b) && !idDeclined(b) && (b.diditSessionId || b.idStatus)) parts.push('ID check started, not finished');
@@ -458,7 +459,7 @@ function renderPipeline(bookings) {
   if (!active.length) list.innerHTML = '<div class="hint">No upcoming bookings in the pipeline.</div>';
   var renderCard = function (b, container) {
     var card = document.createElement('div');
-    var settled = b.isPast || milestones(b).closed;
+    var settled = b.isPast && (b.holdStatus || '').toLowerCase() !== 'held';
     card.className = 'pipeline-card' + (settled ? ' settled' : '') + (isUrgent(b) ? ' urgent' : '');
     if (!settled && !isUrgent(b)) card.style.borderLeftColor = STAGES[stageIndex(b)].color;
     var detail = holdDetail(b);
@@ -499,7 +500,7 @@ function renderPipeline(bookings) {
       diditLink.title = b.diditSessionId ? 'Didit session ' + b.diditSessionId : 'Open the Didit console';
       actions.appendChild(diditLink);
     }
-    if ((b.status === 'Signed' || b.status === 'Deposit Held') && b.email && !holdIsFinal(b)) {
+    if ((b.status === 'Signed' || b.status === 'Deposit Held') && b.email && !(holdIsFinal(b) && b.isPast)) {
       // email the security hold link straight from here — no copy/paste needed
       var holdBtn = document.createElement('button');
       holdBtn.className = 'btn small'; holdBtn.type = 'button';
@@ -518,7 +519,7 @@ function renderPipeline(bookings) {
       });
       actions.appendChild(holdBtn);
     }
-    if ((b.status === 'Signed' || b.status === 'Deposit Held') && !b.email && !holdIsFinal(b)) {
+    if ((b.status === 'Signed' || b.status === 'Deposit Held') && !b.email && !(holdIsFinal(b) && b.isPast)) {
       // no email on this booking, so the link has to be passed on by hand
       var depBtn = document.createElement('button');
       depBtn.className = 'btn small'; depBtn.type = 'button'; depBtn.textContent = 'Copy hold link';
