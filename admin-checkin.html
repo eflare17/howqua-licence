@@ -452,6 +452,13 @@ function renderPipeline(bookings) {
       });
       actions.appendChild(genBtn);
     }
+    if (b.diditSessionId || b.status === 'Signed' || b.status === 'Deposit Held') {
+      var diditLink = document.createElement('a');
+      diditLink.className = 'btn small'; diditLink.target = '_blank'; diditLink.textContent = 'View in Didit';
+      diditLink.href = 'https://business.didit.me/';
+      diditLink.title = b.diditSessionId ? 'Didit session ' + b.diditSessionId : 'Open the Didit console';
+      actions.appendChild(diditLink);
+    }
     if (b.status === 'Signed' && b.email) {
       // email the security hold link straight from here — no copy/paste needed
       var holdBtn = document.createElement('button');
@@ -496,13 +503,6 @@ function renderPipeline(bookings) {
       // account ID pinned so it always opens Howqua's Stripe account, even if another account is active in the browser
       stripeLink.href = 'https://dashboard.stripe.com/acct_1U7YnNIvavyq88hu/payments/' + b.stripeReference; // live mode — add /test/ back before /payments/ if ever switched to test keys
       actions.appendChild(stripeLink);
-    }
-    if (b.diditSessionId || b.status === 'Signed' || b.status === 'Deposit Held') {
-      var diditLink = document.createElement('a');
-      diditLink.className = 'btn small'; diditLink.target = '_blank'; diditLink.textContent = 'View in Didit';
-      diditLink.href = 'https://business.didit.me/';
-      diditLink.title = b.diditSessionId ? 'Didit session ' + b.diditSessionId : 'Open the Didit console';
-      actions.appendChild(diditLink);
     }
     if (b.calendarEventId) {
       var ciBtn = document.createElement('button');
