@@ -85,6 +85,7 @@
     <h2>Booking pipeline</h2>
     <div class="hint">Every booking, from first request through to deposit held, soonest stay first. Generate the signing link for new requests, email the guest their security hold link when you're ready, jump to the hold in Stripe, or send check-in instructions. The hold badge updates automatically when Stripe releases or captures the hold.</div>
     <div id="pipelineList"><div class="hint">Loading…</div></div>
+    <div id="sheetLinkWrap" style="margin-top:10px; display:none;"><a id="sheetLink" class="btn small" href="#" target="_blank" rel="noopener" style="text-decoration:none; display:inline-block;">Open bookings sheet</a> <span class="hint" style="display:inline; margin-left:6px;">for editing a booking's details directly</span></div>
 
     <h2>Upcoming check-ins (from calendar)</h2>
     <div class="hint">Bookings come from the calendar (added automatically when a licence is signed). "Send now" emails the guest their check-in instructions immediately.</div>
@@ -336,6 +337,7 @@ function loadPipeline() {
     .then(function (res) {
       if (!res.success) { document.getElementById('pipelineList').innerHTML = '<div class="hint">' + (res.message || 'Could not load bookings.') + '</div>'; return; }
       renderPipeline(res.bookings || []);
+      if (res.sheetUrl) { document.getElementById('sheetLink').href = res.sheetUrl; document.getElementById('sheetLinkWrap').style.display = 'block'; }
     })
     .catch(function () { document.getElementById('pipelineList').innerHTML = '<div class="hint">Could not load the booking pipeline.</div>'; });
 }
