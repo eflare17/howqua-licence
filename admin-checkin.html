@@ -534,7 +534,9 @@ function renderBookings(bookings) {
     tbody.appendChild(tr);
   });
 }
-function load() {
+// pipelineAlreadyLoading: on first sign-in the pipeline request is fired in parallel
+// with this one (see the login handler), so don't kick it off a second time here.
+function load(pipelineAlreadyLoading) {
   api({ sub: 'get' }).then(function (res) {
     if (!res.success) { setStatus(res.message || 'Could not load.', false); return; }
     document.getElementById('loginPanel').style.display = 'none';
@@ -542,14 +544,17 @@ function load() {
     FIELD_IDS.forEach(function (k) { document.getElementById('f_' + k).value = res.content[k] || ''; });
     if (res.holdEmail) { document.getElementById('h_subject').value = res.holdEmail.subject || ''; document.getElementById('h_body').value = res.holdEmail.body || ''; }
     renderBookings(res.bookings || []);
-    loadPipeline();
+    if (!pipelineAlreadyLoading) loadPipeline();
     setStatus('', true);
   }).catch(function () { setStatus('Could not reach the backend.', false); });
 }
 document.getElementById('loginBtn').addEventListener('click', function () {
   password = document.getElementById('password').value;
   setStatus('Checking…', true);
-  load();
+  // Both requests go out at once. The pipeline is the slower of the two (it checks
+  // Stripe for every live hold), so starting it early is where the time is saved.
+  loadPipeline();
+  load(true);
 });
 document.getElementById('password').addEventListener('keydown', function (e) { if (e.key === 'Enter') document.getElementById('loginBtn').click(); });
 function buildSheetForImage(content) {
