@@ -137,7 +137,7 @@
 
   <div id="adminPanel">
     <h2>Booking pipeline</h2>
-    <div class="hint">Every booking, soonest stay first. The bar on each card shows how far along it is; finished stays fade to grey, and anything arriving within a week that still is not signed turns red. Generate the signing link for new requests, email the guest their security hold link when you are ready, jump to the hold in Stripe, or send check-in instructions.</div>
+    <div class="hint">Every booking, soonest stay first. The bar on each card shows how far along it is; finished stays fade to grey, and anything arriving within a week that still is not signed turns red. Generate the signing link for new requests, send the guest their security hold link when you are ready, jump to the hold in Stripe, or send check-in instructions.</div>
     <div id="pipelineList">
       <div class="bunny-run" aria-label="Loading bookings">
         <div class="bunny-track">
@@ -463,7 +463,7 @@ function renderPipeline(bookings) {
       // email the security hold link straight from here — no copy/paste needed
       var holdBtn = document.createElement('button');
       holdBtn.className = 'btn small'; holdBtn.type = 'button';
-      holdBtn.textContent = b.holdLinkSent ? 'Resend hold link' : 'Email hold link';
+      holdBtn.textContent = b.holdLinkSent ? 'Resend hold link' : 'Send hold link';
       holdBtn.addEventListener('click', function () {
         if (!confirm('Email the security hold link to ' + b.guestName + ' (' + b.email + ')?')) return;
         holdBtn.disabled = true; pipelineStatus(b.bookingId, 'Sending…', true);
@@ -478,7 +478,8 @@ function renderPipeline(bookings) {
       });
       actions.appendChild(holdBtn);
     }
-    if (b.status === 'Signed' || b.status === 'Deposit Held') {
+    if (b.status === 'Signed' && !b.email) {
+      // no email on this booking, so the link has to be passed on by hand
       var depBtn = document.createElement('button');
       depBtn.className = 'btn small'; depBtn.type = 'button'; depBtn.textContent = 'Copy hold link';
       depBtn.addEventListener('click', function () {
@@ -489,7 +490,7 @@ function renderPipeline(bookings) {
         fd.append('type', 'shorten'); fd.append('longUrl', longLink);
         fetch(SCRIPT_URL, { method: 'POST', body: fd }).then(function (r) { return r.json(); }).then(function (res) {
           depBtn.disabled = false;
-          copyWithFallback((res.success && res.shortUrl) ? res.shortUrl : longLink, b.bookingId, '✓ Hold link copied — send it to the guest when you\'re ready.');
+          copyWithFallback((res.success && res.shortUrl) ? res.shortUrl : longLink, b.bookingId, '✓ Hold link copied — no email on this booking, so text or message it to the guest.');
         }).catch(function () {
           depBtn.disabled = false;
           copyWithFallback(longLink, b.bookingId, '✓ Hold link copied (full-length — shortener unavailable).');
