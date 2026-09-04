@@ -49,6 +49,7 @@
   .progress .seg-labels { display: flex; gap: 4px; margin-top: 5px; }
   .progress .seg-label { flex: 1; font-family: Arial, sans-serif; font-size: 12px; color: #aaa; text-align: center; line-height: 1.25; }
   .progress .seg-label.done { font-weight: bold; }
+  .progress .seg-date { display: block; font-weight: normal; color: #999; font-size: 11px; margin-top: 1px; }
   /* the next thing that hasn't happened — underlined rather than coloured, so it
      never gets confused with a completed step */
   .progress .seg-label.now { color: #2b2b2b; text-decoration: underline; text-underline-offset: 3px; }
@@ -56,6 +57,7 @@
     .progress .seg-labels { gap: 2px; }
     .progress .segs { gap: 2px; }
     .progress .seg-label { font-size: 10px; letter-spacing: -0.2px; }
+    .progress .seg-date { font-size: 9px; }
   }
   .pipeline-detail { font-family: Arial, sans-serif; font-size: 13px; color: #777; margin-top: 8px; }
   .pipeline-warn { font-family: Arial, sans-serif; font-size: 14px; font-weight: bold; color: #a33; margin-top: 10px; }
@@ -67,6 +69,25 @@
   .pipeline-card.settled .btn.small { background: #fff; color: #5a6b60; border: 1px solid #c9cdc7; }
   /* Arriving soon and still not signed — the only thing here that actually needs chasing */
   .pipeline-card.urgent { border-left-color: #a33; background: #fdf7f7; }
+
+  /* --- Loading bunny --- runs across the pipeline area until the bookings arrive */
+  .bunny-run { padding: 6px 0 2px; }
+  .bunny-track { position: relative; height: 56px; overflow: hidden;
+    border-bottom: 2px solid #e2ddd0; margin-bottom: 8px; }
+  .bunny { position: absolute; bottom: 0; left: -80px; width: 64px; height: 44px;
+    animation: bunny-cross 3.2s linear infinite; }
+  .bunny svg { display: block; animation: bunny-hop 0.4s ease-in-out infinite; transform-origin: 50% 100%; }
+  @keyframes bunny-cross { from { left: -80px; } to { left: 100%; } }
+  @keyframes bunny-hop {
+    0%, 100% { transform: translateY(0) scaleY(1); }
+    30%      { transform: translateY(-11px) scaleY(1.04); }
+    60%      { transform: translateY(-4px) scaleY(1); }
+    85%      { transform: translateY(0) scaleY(0.94); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .bunny, .bunny svg { animation: none; }
+    .bunny { left: calc(50% - 32px); }
+  }
   .badge-requested { background: #fff3cd; color: #7a5c00; }
   .badge-signed { background: #d4edda; color: #1e5c2c; }
   .badge-deposit { background: #d0e6f7; color: #1a5289; }
@@ -118,8 +139,35 @@
 
   <div id="adminPanel">
     <h2>Booking pipeline</h2>
-    <div class="hint">Every booking, soonest stay first. The bar on each card shows how far along it is; finished stays fade to grey, and anything arriving within a week that still is not signed turns red. Generate the signing link for new requests, email the guest their security hold link when you are ready, jump to the hold in Stripe, or send check-in instructions.</div>
-    <div id="pipelineList"><div class="hint">Loading…</div></div>
+    <div class="hint">Every booking, soonest stay first. The bar on each card shows how far along it is; finished stays fade to grey, and anything arriving within a week that still is not signed turns red. Generate the signing link for new requests, send the guest their security hold link when you are ready, jump to the hold in Stripe, or send check-in instructions.</div>
+    <div id="pipelineList">
+      <div class="bunny-run" aria-label="Loading bookings">
+        <div class="bunny-track">
+          <div class="bunny">
+            <svg viewBox="0 0 64 44" width="64" height="44" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+              <!-- ears -->
+              <ellipse cx="44" cy="10" rx="3.2" ry="9" fill="#e9dccb" stroke="#8a7a66" stroke-width="1.2" transform="rotate(-12 44 10)"/>
+              <ellipse cx="51" cy="11" rx="3.2" ry="9" fill="#e9dccb" stroke="#8a7a66" stroke-width="1.2" transform="rotate(10 51 11)"/>
+              <ellipse cx="44" cy="11" rx="1.4" ry="6" fill="#f3b8b8" transform="rotate(-12 44 11)"/>
+              <ellipse cx="51" cy="12" rx="1.4" ry="6" fill="#f3b8b8" transform="rotate(10 51 12)"/>
+              <!-- body -->
+              <ellipse cx="28" cy="30" rx="18" ry="11" fill="#f5efe4" stroke="#8a7a66" stroke-width="1.2"/>
+              <!-- head -->
+              <circle cx="46" cy="24" r="9.5" fill="#f5efe4" stroke="#8a7a66" stroke-width="1.2"/>
+              <!-- tail -->
+              <circle cx="10" cy="29" r="4" fill="#fff" stroke="#8a7a66" stroke-width="1.2"/>
+              <!-- eye & nose -->
+              <circle cx="50" cy="22" r="1.4" fill="#2b2b2b"/>
+              <ellipse cx="55" cy="26" rx="1.3" ry="0.9" fill="#d98a8a"/>
+              <!-- feet -->
+              <ellipse cx="18" cy="40" rx="6" ry="2.4" fill="#f5efe4" stroke="#8a7a66" stroke-width="1.2"/>
+              <ellipse cx="34" cy="40" rx="5" ry="2.2" fill="#f5efe4" stroke="#8a7a66" stroke-width="1.2"/>
+            </svg>
+          </div>
+        </div>
+        <div class="hint" style="text-align:center;">Fetching bookings…</div>
+      </div>
+    </div>
     <div id="sheetLinkWrap" style="margin-top:10px; display:none;"><a id="sheetLink" class="btn small" href="#" target="_blank" rel="noopener" style="text-decoration:none; display:inline-block;">Open bookings sheet</a> <span class="hint" style="display:inline; margin-left:6px;">for editing a booking's details directly</span></div>
 
     <h2>Upcoming check-ins (from calendar)</h2>
@@ -240,8 +288,37 @@ function nextMilestone(b) {
   for (var i = 0; i < STAGES.length; i++) if (!m[STAGES[i].key]) return i;
   return -1; // nothing left to do
 }
+// "4 Sep 2026, 8:15PM" or an ISO string  ->  "4 Sep"  (empty if unreadable)
+function shortDate(text) {
+  if (!text) return '';
+  var m = String(text).match(/^(\d{1,2})\s+([A-Za-z]{3})/);
+  if (m) return m[1] + ' ' + m[2];
+  var d = new Date(text);
+  if (isNaN(d)) return '';
+  return d.getDate() + ' ' + ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][d.getMonth()];
+}
+// full, readable timestamp for the hover tooltip
+function longDate(text) {
+  if (!text) return '';
+  if (/^\d{1,2}\s+[A-Za-z]{3}/.test(String(text))) return String(text);
+  var d = new Date(text);
+  if (isNaN(d)) return String(text);
+  return d.toLocaleString('en-AU', { day: 'numeric', month: 'short', year: 'numeric', hour: 'numeric', minute: '2-digit' });
+}
+// when each milestone happened, from what the sheet records
+function milestoneTimes(b) {
+  var hs = (b.holdStatus || '').toLowerCase();
+  return {
+    requested: b.requestedOn || '',
+    signed:    b.signedOn || '',
+    hold:      hs === 'held' ? (b.holdUpdated || '') : '', // once released, Hold Updated is the release time
+    checkin:   b.checkinSentOn || '',
+    closed:    holdIsFinal(b) ? (b.holdUpdated || '') : ''
+  };
+}
 function progressBar(b) {
   var m = milestones(b);
+  var when = milestoneTimes(b);
   var next = nextMilestone(b);
   var hs = (b.holdStatus || '').toLowerCase();
   var segs = '', labels = '';
@@ -253,9 +330,12 @@ function progressBar(b) {
       else if (hs === 'refunded') { label = 'Refunded'; color = '#842029'; }
     }
     var done = m[STAGES[i].key];
-    segs += '<div class="seg" style="background:' + (done ? color : '#e4e0d6') + ';"></div>';
+    var t = done ? when[STAGES[i].key] : '';
+    var tip = t ? ' title="' + label + ': ' + longDate(t).replace(/"/g, '&quot;') + '"' : '';
+    segs += '<div class="seg" style="background:' + (done ? color : '#e4e0d6') + ';"' + tip + '></div>';
     labels += '<div class="seg-label' + (done ? ' done' : '') + (i === next ? ' now' : '') + '"' +
-      (done ? ' style="color:' + color + ';"' : '') + '>' + label + '</div>';
+      (done ? ' style="color:' + color + ';"' : '') + tip + '>' + label +
+      (t ? '<span class="seg-date">' + shortDate(t) + '</span>' : '') + '</div>';
   }
   return '<div class="progress"><div class="segs">' + segs + '</div><div class="seg-labels">' + labels + '</div></div>';
 }
@@ -299,11 +379,9 @@ function daysBadge(b) {
 function holdDetail(b) {
   var parts = [];
   var hs = (b.holdStatus || '').toLowerCase();
-  var words = { held: 'Hold active since', released: 'Hold released', captured: 'Hold captured', refunded: 'Hold refunded' };
-  if (hs && words[hs]) parts.push(words[hs] + (b.holdUpdated ? ' ' + b.holdUpdated : ''));
-  else if (hs) parts.push('Hold ' + hs + (b.holdUpdated ? ' ' + b.holdUpdated : ''));
-  else if (b.holdLinkSent) parts.push('Hold link sent ' + b.holdLinkSent);
-  else if (b.status === 'Signed') parts.push('Hold link not sent yet');
+  // dates for held/released/captured now sit under the bar, so only say what the bar can't
+  if (!hs && b.holdLinkSent) parts.push('Hold link sent ' + shortDate(b.holdLinkSent) + ', not authorised yet');
+  else if (!hs && b.status === 'Signed') parts.push('Hold link not sent yet');
 
   // check-in instructions — only worth saying once there's a stay to send them for
   if (b.checkinSent) parts.push('Check-in instructions sent');
@@ -406,11 +484,18 @@ function renderPipeline(bookings) {
       });
       actions.appendChild(genBtn);
     }
-    if (b.status === 'Signed' && b.email) {
+    if (b.diditSessionId || b.status === 'Signed' || b.status === 'Deposit Held') {
+      var diditLink = document.createElement('a');
+      diditLink.className = 'btn small'; diditLink.target = '_blank'; diditLink.textContent = 'View in Didit';
+      diditLink.href = 'https://business.didit.me/';
+      diditLink.title = b.diditSessionId ? 'Didit session ' + b.diditSessionId : 'Open the Didit console';
+      actions.appendChild(diditLink);
+    }
+    if ((b.status === 'Signed' || b.status === 'Deposit Held') && b.email) {
       // email the security hold link straight from here — no copy/paste needed
       var holdBtn = document.createElement('button');
       holdBtn.className = 'btn small'; holdBtn.type = 'button';
-      holdBtn.textContent = b.holdLinkSent ? 'Resend hold link' : 'Email hold link';
+      holdBtn.textContent = b.holdLinkSent ? 'Resend hold link' : 'Send hold link';
       holdBtn.addEventListener('click', function () {
         if (!confirm('Email the security hold link to ' + b.guestName + ' (' + b.email + ')?')) return;
         holdBtn.disabled = true; pipelineStatus(b.bookingId, 'Sending…', true);
@@ -425,7 +510,8 @@ function renderPipeline(bookings) {
       });
       actions.appendChild(holdBtn);
     }
-    if (b.status === 'Signed' || b.status === 'Deposit Held') {
+    if ((b.status === 'Signed' || b.status === 'Deposit Held') && !b.email) {
+      // no email on this booking, so the link has to be passed on by hand
       var depBtn = document.createElement('button');
       depBtn.className = 'btn small'; depBtn.type = 'button'; depBtn.textContent = 'Copy hold link';
       depBtn.addEventListener('click', function () {
@@ -436,7 +522,7 @@ function renderPipeline(bookings) {
         fd.append('type', 'shorten'); fd.append('longUrl', longLink);
         fetch(SCRIPT_URL, { method: 'POST', body: fd }).then(function (r) { return r.json(); }).then(function (res) {
           depBtn.disabled = false;
-          copyWithFallback((res.success && res.shortUrl) ? res.shortUrl : longLink, b.bookingId, '✓ Hold link copied — send it to the guest when you\'re ready.');
+          copyWithFallback((res.success && res.shortUrl) ? res.shortUrl : longLink, b.bookingId, '✓ Hold link copied — no email on this booking, so text or message it to the guest.');
         }).catch(function () {
           depBtn.disabled = false;
           copyWithFallback(longLink, b.bookingId, '✓ Hold link copied (full-length — shortener unavailable).');
@@ -450,13 +536,6 @@ function renderPipeline(bookings) {
       // account ID pinned so it always opens Howqua's Stripe account, even if another account is active in the browser
       stripeLink.href = 'https://dashboard.stripe.com/acct_1U7YnNIvavyq88hu/payments/' + b.stripeReference; // live mode — add /test/ back before /payments/ if ever switched to test keys
       actions.appendChild(stripeLink);
-    }
-    if (b.diditSessionId || b.status === 'Signed' || b.status === 'Deposit Held') {
-      var diditLink = document.createElement('a');
-      diditLink.className = 'btn small'; diditLink.target = '_blank'; diditLink.textContent = 'View in Didit';
-      diditLink.href = 'https://business.didit.me/';
-      diditLink.title = b.diditSessionId ? 'Didit session ' + b.diditSessionId : 'Open the Didit console';
-      actions.appendChild(diditLink);
     }
     if (b.calendarEventId) {
       var ciBtn = document.createElement('button');
@@ -534,7 +613,9 @@ function renderBookings(bookings) {
     tbody.appendChild(tr);
   });
 }
-function load() {
+// pipelineAlreadyLoading: on first sign-in the pipeline request is fired in parallel
+// with this one (see the login handler), so don't kick it off a second time here.
+function load(pipelineAlreadyLoading) {
   api({ sub: 'get' }).then(function (res) {
     if (!res.success) { setStatus(res.message || 'Could not load.', false); return; }
     document.getElementById('loginPanel').style.display = 'none';
@@ -542,14 +623,17 @@ function load() {
     FIELD_IDS.forEach(function (k) { document.getElementById('f_' + k).value = res.content[k] || ''; });
     if (res.holdEmail) { document.getElementById('h_subject').value = res.holdEmail.subject || ''; document.getElementById('h_body').value = res.holdEmail.body || ''; }
     renderBookings(res.bookings || []);
-    loadPipeline();
+    if (!pipelineAlreadyLoading) loadPipeline();
     setStatus('', true);
   }).catch(function () { setStatus('Could not reach the backend.', false); });
 }
 document.getElementById('loginBtn').addEventListener('click', function () {
   password = document.getElementById('password').value;
   setStatus('Checking…', true);
-  load();
+  // Both requests go out at once. The pipeline is the slower of the two (it checks
+  // Stripe for every live hold), so starting it early is where the time is saved.
+  loadPipeline();
+  load(true);
 });
 document.getElementById('password').addEventListener('keydown', function (e) { if (e.key === 'Enter') document.getElementById('loginBtn').click(); });
 function buildSheetForImage(content) {
@@ -603,28 +687,23 @@ document.getElementById('saveBtn').addEventListener('click', function () {
   });
 });
 </script>
+
 <script>
 window.addEventListener('load', function(){
   document.getElementById('loginPanel').style.display='none';
   document.getElementById('adminPanel').style.display='block';
   var iso=function(d){var t=new Date();t.setDate(t.getDate()+d);return t.toISOString().slice(0,10);};
-  var fmt=function(d){var t=new Date();t.setDate(t.getDate()+d);
-    return t.toLocaleDateString('en-AU',{day:'numeric',month:'short',year:'numeric'});};
+  var fmt=function(d){var t=new Date();t.setDate(t.getDate()+d);return t.toLocaleDateString('en-AU',{day:'numeric',month:'short',year:'numeric'});};
   renderPipeline([
-    {bookingId:'HH-2026-4A2B91C0',guestName:'Sarah Whitcombe',email:'sarah.w@example.com',bond:'$300.00',
-     checkin:fmt(3),checkout:fmt(6),checkinIso:iso(3),status:'Requested'},
-    {bookingId:'HH-2026-1C77B903',guestName:'Priya Ramaswamy',email:'priya.r@example.com',bond:'$500.00',
-     checkin:fmt(11),checkout:fmt(14),checkinIso:iso(11),status:'Deposit Held',holdStatus:'Held',
-     holdUpdated:'2 Sep 2026',stripeReference:'pi_3QxAbC',idStatus:'Approved',calendarEventId:'ev2',checkinSent:true},
-    {bookingId:'HH-2026-8D1E22F4',guestName:'Marcus Lai',email:'m.lai@example.com',bond:'$300.00',
-     checkin:fmt(19),checkout:fmt(23),checkinIso:iso(19),status:'Signed',calendarEventId:'ev1'},
-    {bookingId:'HH-2026-77BB3311',guestName:'Dana Okafor (no hold)',email:'dana.o@example.com',bond:'$300.00',
-     checkin:fmt(5),checkout:fmt(8),checkinIso:iso(5),status:'Signed',calendarEventId:'ev4',checkinSent:true},
+    {bookingId:'HH-2026-PBRTV9DP',guestName:'Tyson Hodge',email:'tyson17@example.com',bond:'$300.00',
+     checkin:fmt(49),checkout:fmt(52),checkinIso:iso(49),status:'Deposit Held',holdStatus:'Held',
+     holdUpdated:'4 Sep 2026, 8:15PM',requestedOn:'28 Aug 2026, 10:02AM',signedOn:'2 Sep 2026, 6:40PM',
+     stripeReference:'pi_x',idStatus:'Approved',calendarEventId:'ev1'},
     {bookingId:'HH-2026-9F3C0D71',guestName:'Ellie Marsden',email:'ellie.m@example.com',bond:'$300.00',
      checkin:fmt(-24),checkout:fmt(-21),checkinIso:iso(-24),status:'Deposit Held',holdStatus:'Released',
-     holdUpdated:'12 Aug 2026',isPast:true,stripeReference:'pi_3QwZzZ',calendarEventId:'ev5',checkinSent:true}
+     holdUpdated:'12 Aug 2026, 9:00AM',requestedOn:'1 Jul 2026, 2:15PM',signedOn:'3 Jul 2026, 7:30PM',
+     checkinSent:true,checkinSentOn:'2026-08-09T22:10:00.000Z',isPast:true,stripeReference:'pi_y',calendarEventId:'ev2'}
   ]);
-  document.getElementById('bookingRows').innerHTML='<tr><td colspan="5">(not part of this preview)</td></tr>';
 });
 </script></body>
 </html>

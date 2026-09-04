@@ -49,6 +49,7 @@
   .progress .seg-labels { display: flex; gap: 4px; margin-top: 5px; }
   .progress .seg-label { flex: 1; font-family: Arial, sans-serif; font-size: 12px; color: #aaa; text-align: center; line-height: 1.25; }
   .progress .seg-label.done { font-weight: bold; }
+  .progress .seg-date { display: block; font-weight: normal; color: #999; font-size: 11px; margin-top: 1px; }
   /* the next thing that hasn't happened — underlined rather than coloured, so it
      never gets confused with a completed step */
   .progress .seg-label.now { color: #2b2b2b; text-decoration: underline; text-underline-offset: 3px; }
@@ -56,6 +57,7 @@
     .progress .seg-labels { gap: 2px; }
     .progress .segs { gap: 2px; }
     .progress .seg-label { font-size: 10px; letter-spacing: -0.2px; }
+    .progress .seg-date { font-size: 9px; }
   }
   .pipeline-detail { font-family: Arial, sans-serif; font-size: 13px; color: #777; margin-top: 8px; }
   .pipeline-warn { font-family: Arial, sans-serif; font-size: 14px; font-weight: bold; color: #a33; margin-top: 10px; }
@@ -286,8 +288,37 @@ function nextMilestone(b) {
   for (var i = 0; i < STAGES.length; i++) if (!m[STAGES[i].key]) return i;
   return -1; // nothing left to do
 }
+// "4 Sep 2026, 8:15PM" or an ISO string  ->  "4 Sep"  (empty if unreadable)
+function shortDate(text) {
+  if (!text) return '';
+  var m = String(text).match(/^(\d{1,2})\s+([A-Za-z]{3})/);
+  if (m) return m[1] + ' ' + m[2];
+  var d = new Date(text);
+  if (isNaN(d)) return '';
+  return d.getDate() + ' ' + ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][d.getMonth()];
+}
+// full, readable timestamp for the hover tooltip
+function longDate(text) {
+  if (!text) return '';
+  if (/^\d{1,2}\s+[A-Za-z]{3}/.test(String(text))) return String(text);
+  var d = new Date(text);
+  if (isNaN(d)) return String(text);
+  return d.toLocaleString('en-AU', { day: 'numeric', month: 'short', year: 'numeric', hour: 'numeric', minute: '2-digit' });
+}
+// when each milestone happened, from what the sheet records
+function milestoneTimes(b) {
+  var hs = (b.holdStatus || '').toLowerCase();
+  return {
+    requested: b.requestedOn || '',
+    signed:    b.signedOn || '',
+    hold:      hs === 'held' ? (b.holdUpdated || '') : '', // once released, Hold Updated is the release time
+    checkin:   b.checkinSentOn || '',
+    closed:    holdIsFinal(b) ? (b.holdUpdated || '') : ''
+  };
+}
 function progressBar(b) {
   var m = milestones(b);
+  var when = milestoneTimes(b);
   var next = nextMilestone(b);
   var hs = (b.holdStatus || '').toLowerCase();
   var segs = '', labels = '';
@@ -299,9 +330,12 @@ function progressBar(b) {
       else if (hs === 'refunded') { label = 'Refunded'; color = '#842029'; }
     }
     var done = m[STAGES[i].key];
-    segs += '<div class="seg" style="background:' + (done ? color : '#e4e0d6') + ';"></div>';
+    var t = done ? when[STAGES[i].key] : '';
+    var tip = t ? ' title="' + label + ': ' + longDate(t).replace(/"/g, '&quot;') + '"' : '';
+    segs += '<div class="seg" style="background:' + (done ? color : '#e4e0d6') + ';"' + tip + '></div>';
     labels += '<div class="seg-label' + (done ? ' done' : '') + (i === next ? ' now' : '') + '"' +
-      (done ? ' style="color:' + color + ';"' : '') + '>' + label + '</div>';
+      (done ? ' style="color:' + color + ';"' : '') + tip + '>' + label +
+      (t ? '<span class="seg-date">' + shortDate(t) + '</span>' : '') + '</div>';
   }
   return '<div class="progress"><div class="segs">' + segs + '</div><div class="seg-labels">' + labels + '</div></div>';
 }
@@ -345,11 +379,9 @@ function daysBadge(b) {
 function holdDetail(b) {
   var parts = [];
   var hs = (b.holdStatus || '').toLowerCase();
-  var words = { held: 'Hold active since', released: 'Hold released', captured: 'Hold captured', refunded: 'Hold refunded' };
-  if (hs && words[hs]) parts.push(words[hs] + (b.holdUpdated ? ' ' + b.holdUpdated : ''));
-  else if (hs) parts.push('Hold ' + hs + (b.holdUpdated ? ' ' + b.holdUpdated : ''));
-  else if (b.holdLinkSent) parts.push('Hold link sent ' + b.holdLinkSent);
-  else if (b.status === 'Signed') parts.push('Hold link not sent yet');
+  // dates for held/released/captured now sit under the bar, so only say what the bar can't
+  if (!hs && b.holdLinkSent) parts.push('Hold link sent ' + shortDate(b.holdLinkSent) + ', not authorised yet');
+  else if (!hs && b.status === 'Signed') parts.push('Hold link not sent yet');
 
   // check-in instructions — only worth saying once there's a stay to send them for
   if (b.checkinSent) parts.push('Check-in instructions sent');
@@ -459,7 +491,7 @@ function renderPipeline(bookings) {
       diditLink.title = b.diditSessionId ? 'Didit session ' + b.diditSessionId : 'Open the Didit console';
       actions.appendChild(diditLink);
     }
-    if ((b.status === 'Signed' || b.status === 'Deposit Held') && b.email) {
+    if ((b.status === 'Signed' || b.status === 'Deposit Held') && b.email && !holdIsFinal(b)) {
       // email the security hold link straight from here — no copy/paste needed
       var holdBtn = document.createElement('button');
       holdBtn.className = 'btn small'; holdBtn.type = 'button';
@@ -478,7 +510,7 @@ function renderPipeline(bookings) {
       });
       actions.appendChild(holdBtn);
     }
-    if ((b.status === 'Signed' || b.status === 'Deposit Held') && !b.email) {
+    if ((b.status === 'Signed' || b.status === 'Deposit Held') && !b.email && !holdIsFinal(b)) {
       // no email on this booking, so the link has to be passed on by hand
       var depBtn = document.createElement('button');
       depBtn.className = 'btn small'; depBtn.type = 'button'; depBtn.textContent = 'Copy hold link';
