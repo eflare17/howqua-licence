@@ -139,7 +139,7 @@
 
   <div id="adminPanel">
     <h2>Booking pipeline</h2>
-    <div class="hint">Every booking, soonest stay first. The bar on each card shows how far along it is; finished stays fade to grey, and anything arriving within a week that still is not signed turns red. Generate the signing link for new requests, send the guest their security hold link when you are ready, jump to the hold in Stripe, or send check-in instructions.</div>
+    <div class="hint">Every booking, soonest stay first. The bar on each card shows how far along it is; finished stays fade to grey, and anything arriving within a week that is not signed, ID-verified and held turns red. Generate the signing link for new requests, send the guest their security hold link when you are ready, jump to the hold in Stripe, or send check-in instructions.</div>
     <div id="pipelineList">
       <div class="bunny-run" aria-label="Loading bookings">
         <div class="bunny-track">
@@ -257,10 +257,20 @@ function propertyLabel(b) {
 var STAGES = [
   { key: 'requested', label: 'Requested', color: '#c99700' },
   { key: 'signed',    label: 'Signed',    color: '#1a5289' },
+  { key: 'id',        label: 'ID',        color: '#a0522d' },
   { key: 'hold',      label: 'Hold',      color: '#0f766e' },
   { key: 'checkin',   label: 'Check-in',  color: '#6b4fa0' },
   { key: 'closed',    label: 'Released',  color: '#5a6b60' }
 ];
+// ID verification result, written to the sheet by the Didit webhook
+function idApproved(b) {
+  var st = (b.idStatus || '').toLowerCase();
+  return st.indexOf('approv') >= 0 || st.indexOf('verified') >= 0;
+}
+function idDeclined(b) {
+  var st = (b.idStatus || '').toLowerCase();
+  return st.indexOf('declin') >= 0 || st.indexOf('reject') >= 0 || st.indexOf('fail') >= 0;
+}
 function holdIsFinal(b) {
   var hs = (b.holdStatus || '').toLowerCase();
   return hs === 'released' || hs === 'captured' || hs === 'refunded';
@@ -270,6 +280,7 @@ function milestones(b) {
   return {
     requested: true, // the row existing IS the request
     signed:    b.status === 'Signed' || b.status === 'Deposit Held' || b.status === 'Completed' || !!b.signedOn,
+    id:        idApproved(b),
     hold:      hs === 'held' || holdIsFinal(b) || b.status === 'Deposit Held',
     checkin:   !!b.checkinSent,
     closed:    holdIsFinal(b) || b.status === 'Completed'
@@ -311,6 +322,7 @@ function milestoneTimes(b) {
   return {
     requested: b.requestedOn || '',
     signed:    b.signedOn || '',
+    id:        (idApproved(b) || idDeclined(b)) ? (b.idUpdated || '') : '',
     hold:      hs === 'held' ? (b.holdUpdated || '') : '', // once released, Hold Updated is the release time
     checkin:   b.checkinSentOn || '',
     closed:    holdIsFinal(b) ? (b.holdUpdated || '') : ''
@@ -330,6 +342,7 @@ function progressBar(b) {
       else if (hs === 'refunded') { label = 'Refunded'; color = '#842029'; }
     }
     var done = m[STAGES[i].key];
+    if (STAGES[i].key === 'id' && idDeclined(b)) { label = 'Declined'; color = '#842029'; done = true; }
     var t = done ? when[STAGES[i].key] : '';
     var tip = t ? ' title="' + label + ': ' + longDate(t).replace(/"/g, '&quot;') + '"' : '';
     segs += '<div class="seg" style="background:' + (done ? color : '#e4e0d6') + ';"' + tip + '></div>';
@@ -357,11 +370,13 @@ function isUrgent(b) {
   var n = daysUntil(b);
   if (n === null || n < 0 || n > 7) return false;
   var m = milestones(b);
-  return !m.signed || !m.hold;
+  return !m.signed || !m.id || !m.hold;
 }
 function urgentReason(b) {
   var m = milestones(b);
   if (!m.signed) return 'Not signed yet';
+  if (idDeclined(b)) return 'ID was declined';
+  if (!m.id) return 'ID not verified yet';
   if (!m.hold) return 'No hold on the card yet';
   return '';
 }
@@ -383,6 +398,7 @@ function holdDetail(b) {
   if (!hs && b.holdLinkSent) parts.push('Hold link sent ' + shortDate(b.holdLinkSent) + ', not authorised yet');
   else if (!hs && b.status === 'Signed') parts.push('Hold link not sent yet');
 
+  if (!idApproved(b) && !idDeclined(b) && (b.diditSessionId || b.idStatus)) parts.push('ID check started, not finished');
   // check-in instructions — only worth saying once there's a stay to send them for
   if (b.checkinSent) parts.push('Check-in instructions sent');
   else if (b.calendarEventId && !b.isPast) parts.push('Check-in instructions not sent yet');
@@ -400,14 +416,6 @@ function holdBadge(b) {
   if (b.holdLinkSent) return '<span class="badge badge-hold-sent">Hold link sent ' + b.holdLinkSent + '</span>';
   if (b.status === 'Signed') return '<span class="badge badge-hold-none">Hold link not sent</span>';
   return '';
-}
-function idBadge(b) {
-  // ID verification result, written by the Didit webhook
-  const st = (b.idStatus || '').toLowerCase();
-  if (!st) return b.diditSessionId ? '<span class="badge badge-id-pending">ID check started</span>' : '';
-  if (st.indexOf('approv') >= 0 || st.indexOf('verified') >= 0) return '<span class="badge badge-id-ok">ID approved</span>';
-  if (st.indexOf('declin') >= 0 || st.indexOf('reject') >= 0 || st.indexOf('fail') >= 0) return '<span class="badge badge-id-bad">ID declined</span>';
-  return '<span class="badge badge-id-pending">ID ' + b.idStatus + '</span>';
 }
 function pipelineDepositLink(b) {
   var data = { bookingId: b.bookingId, licenseeName: b.guestName, checkin: b.checkin, checkout: b.checkout, bond: b.bond, licenseeEmail: b.email };
@@ -461,7 +469,7 @@ function renderPipeline(bookings) {
         '<div class="pipeline-name">' + b.guestName + '</div>' +
         '<div class="pipeline-meta">' + (b.checkin || '?') + ' → ' + (b.checkout || '?') + (b.bond ? ' · ' + b.bond : '') + (b.email ? '<br>' + b.email : '') + '</div>' +
         '<div class="pipeline-id">' + b.bookingId + '</div>' +
-      '</div><div style="text-align:right;">' + daysBadge(b) + (idBadge(b) ? '<div style="margin-top:6px;">' + idBadge(b) + '</div>' : '') + '</div></div>' +
+      '</div><div style="text-align:right;">' + daysBadge(b) + '</div></div>' +
       progressBar(b) +
       (warn ? '<div class="pipeline-warn">' + warn + ' &middot; arriving in ' + daysUntil(b) + ' day' + (daysUntil(b) === 1 ? '' : 's') + '</div>' : '') +
       (detail ? '<div class="pipeline-detail">' + detail + '</div>' : '') +
@@ -491,7 +499,7 @@ function renderPipeline(bookings) {
       diditLink.title = b.diditSessionId ? 'Didit session ' + b.diditSessionId : 'Open the Didit console';
       actions.appendChild(diditLink);
     }
-    if ((b.status === 'Signed' || b.status === 'Deposit Held') && b.email) {
+    if ((b.status === 'Signed' || b.status === 'Deposit Held') && b.email && !holdIsFinal(b)) {
       // email the security hold link straight from here — no copy/paste needed
       var holdBtn = document.createElement('button');
       holdBtn.className = 'btn small'; holdBtn.type = 'button';
@@ -510,7 +518,7 @@ function renderPipeline(bookings) {
       });
       actions.appendChild(holdBtn);
     }
-    if ((b.status === 'Signed' || b.status === 'Deposit Held') && !b.email) {
+    if ((b.status === 'Signed' || b.status === 'Deposit Held') && !b.email && !holdIsFinal(b)) {
       // no email on this booking, so the link has to be passed on by hand
       var depBtn = document.createElement('button');
       depBtn.className = 'btn small'; depBtn.type = 'button'; depBtn.textContent = 'Copy hold link';
@@ -687,7 +695,6 @@ document.getElementById('saveBtn').addEventListener('click', function () {
   });
 });
 </script>
-
 <script>
 window.addEventListener('load', function(){
   document.getElementById('loginPanel').style.display='none';
@@ -695,14 +702,13 @@ window.addEventListener('load', function(){
   var iso=function(d){var t=new Date();t.setDate(t.getDate()+d);return t.toISOString().slice(0,10);};
   var fmt=function(d){var t=new Date();t.setDate(t.getDate()+d);return t.toLocaleDateString('en-AU',{day:'numeric',month:'short',year:'numeric'});};
   renderPipeline([
-    {bookingId:'HH-2026-PBRTV9DP',guestName:'Tyson Hodge',email:'tyson17@example.com',bond:'$300.00',
-     checkin:fmt(49),checkout:fmt(52),checkinIso:iso(49),status:'Deposit Held',holdStatus:'Held',
-     holdUpdated:'4 Sep 2026, 8:15PM',requestedOn:'28 Aug 2026, 10:02AM',signedOn:'2 Sep 2026, 6:40PM',
-     stripeReference:'pi_x',idStatus:'Approved',calendarEventId:'ev1'},
-    {bookingId:'HH-2026-9F3C0D71',guestName:'Ellie Marsden',email:'ellie.m@example.com',bond:'$300.00',
-     checkin:fmt(-24),checkout:fmt(-21),checkinIso:iso(-24),status:'Deposit Held',holdStatus:'Released',
-     holdUpdated:'12 Aug 2026, 9:00AM',requestedOn:'1 Jul 2026, 2:15PM',signedOn:'3 Jul 2026, 7:30PM',
-     checkinSent:true,checkinSentOn:'2026-08-09T22:10:00.000Z',isPast:true,stripeReference:'pi_y',calendarEventId:'ev2'}
+    {bookingId:'HH-2026-A1',guestName:'ID approved, held',email:'a@example.com',bond:'$300.00',checkin:fmt(20),checkout:fmt(23),checkinIso:iso(20),
+     status:'Deposit Held',holdStatus:'Held',holdUpdated:'4 Sep 2026, 8:15PM',requestedOn:'28 Aug 2026, 10:02AM',signedOn:'2 Sep 2026, 6:40PM',
+     idStatus:'Approved',idUpdated:'2 Sep 2026, 6:55PM',diditSessionId:'x',calendarEventId:'e1'},
+    {bookingId:'HH-2026-B2',guestName:'ID declined, 5 days out',email:'b@example.com',bond:'$300.00',checkin:fmt(5),checkout:fmt(8),checkinIso:iso(5),
+     status:'Signed',requestedOn:'1 Sep 2026, 9:00AM',signedOn:'3 Sep 2026, 1:10PM',idStatus:'Declined',idUpdated:'3 Sep 2026, 1:30PM',diditSessionId:'y',calendarEventId:'e2'},
+    {bookingId:'HH-2026-C3',guestName:'Signed, ID started',email:'c@example.com',bond:'$300.00',checkin:fmt(30),checkout:fmt(33),checkinIso:iso(30),
+     status:'Signed',requestedOn:'1 Sep 2026, 9:00AM',signedOn:'3 Sep 2026, 1:10PM',idStatus:'Started',diditSessionId:'z',calendarEventId:'e3'}
   ]);
 });
 </script></body>
