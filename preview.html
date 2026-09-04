@@ -603,5 +603,28 @@ document.getElementById('saveBtn').addEventListener('click', function () {
   });
 });
 </script>
-</body>
+<script>
+window.addEventListener('load', function(){
+  document.getElementById('loginPanel').style.display='none';
+  document.getElementById('adminPanel').style.display='block';
+  var iso=function(d){var t=new Date();t.setDate(t.getDate()+d);return t.toISOString().slice(0,10);};
+  var fmt=function(d){var t=new Date();t.setDate(t.getDate()+d);
+    return t.toLocaleDateString('en-AU',{day:'numeric',month:'short',year:'numeric'});};
+  renderPipeline([
+    {bookingId:'HH-2026-4A2B91C0',guestName:'Sarah Whitcombe',email:'sarah.w@example.com',bond:'$300.00',
+     checkin:fmt(3),checkout:fmt(6),checkinIso:iso(3),status:'Requested'},
+    {bookingId:'HH-2026-1C77B903',guestName:'Priya Ramaswamy',email:'priya.r@example.com',bond:'$500.00',
+     checkin:fmt(11),checkout:fmt(14),checkinIso:iso(11),status:'Deposit Held',holdStatus:'Held',
+     holdUpdated:'2 Sep 2026',stripeReference:'pi_3QxAbC',idStatus:'Approved',calendarEventId:'ev2',checkinSent:true},
+    {bookingId:'HH-2026-8D1E22F4',guestName:'Marcus Lai',email:'m.lai@example.com',bond:'$300.00',
+     checkin:fmt(19),checkout:fmt(23),checkinIso:iso(19),status:'Signed',calendarEventId:'ev1'},
+    {bookingId:'HH-2026-77BB3311',guestName:'Dana Okafor (no hold)',email:'dana.o@example.com',bond:'$300.00',
+     checkin:fmt(5),checkout:fmt(8),checkinIso:iso(5),status:'Signed',calendarEventId:'ev4',checkinSent:true},
+    {bookingId:'HH-2026-9F3C0D71',guestName:'Ellie Marsden',email:'ellie.m@example.com',bond:'$300.00',
+     checkin:fmt(-24),checkout:fmt(-21),checkinIso:iso(-24),status:'Deposit Held',holdStatus:'Released',
+     holdUpdated:'12 Aug 2026',isPast:true,stripeReference:'pi_3QwZzZ',calendarEventId:'ev5',checkinSent:true}
+  ]);
+  document.getElementById('bookingRows').innerHTML='<tr><td colspan="5">(not part of this preview)</td></tr>';
+});
+</script></body>
 </html>
