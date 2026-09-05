@@ -263,6 +263,13 @@ let rangeStart = null;
 let rangeEnd = null;
 let hoverDate = null;
 const minNightsByType = { minimoon: 3, anniversary: 2, standard: 2 };
+const MIN_NOTICE_DAYS = 5; // guests can't check in sooner than this many days from today
+function earliestCheckin() {
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  d.setDate(d.getDate() + MIN_NOTICE_DAYS);
+  return d;
+}
 
 // auto-format phone number as 04xx xxx xxx while typing
 document.getElementById('licenseePhone').addEventListener('input', (e) => {
@@ -337,11 +344,14 @@ function renderCalendar() {
     const dateKey = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
     const isBooked = busyDates.has(dateKey);
 
-    if (d < today || d > maxDate || tooSoonForCheckout || isBooked) {
+    const tooShortNotice = d >= today && d < earliestCheckin() && !rangeStart;
+    if (d < today || d > maxDate || tooSoonForCheckout || isBooked || tooShortNotice) {
       cell.classList.add('cal-disabled');
       if (isBooked) {
         cell.classList.add('cal-booked');
         cell.title = 'Already booked';
+      } else if (tooShortNotice) {
+        cell.title = 'Bookings need at least ' + MIN_NOTICE_DAYS + " days' notice";
       }
     } else {
       if (sameDay(d, rangeStart)) cell.classList.add('cal-selected-start');
@@ -476,6 +486,12 @@ document.getElementById('submitBtn').addEventListener('click', async () => {
   if (!name || !email || !checkin || !checkout) {
     statusEl.style.color = '#a33';
     statusEl.textContent = 'Please fill in your name, email, and select your check-in and check-out dates.';
+    return;
+  }
+
+  if (rangeStart && rangeStart < earliestCheckin()) {
+    statusEl.style.color = '#a33';
+    statusEl.textContent = 'Bookings need at least ' + MIN_NOTICE_DAYS + " days' notice — please choose a later check-in date.";
     return;
   }
 

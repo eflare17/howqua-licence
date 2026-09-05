@@ -70,6 +70,16 @@
   /* Arriving soon and still not signed — the only thing here that actually needs chasing */
   .pipeline-card.urgent { border-left-color: #a33; background: #fdf7f7; }
 
+  /* --- Collapsible settings sections --- */
+  details.settings { margin-top: 28px; border-top: 1px solid #e2ddd0; padding-top: 6px; }
+  details.settings > summary { list-style: none; cursor: pointer; display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+  details.settings > summary::-webkit-details-marker { display: none; }
+  details.settings > summary h2 { margin: 12px 0 4px; }
+  details.settings > summary h2::before { content: '▸'; display: inline-block; width: 18px; color: #8a7a66; transition: transform 0.15s; }
+  details.settings[open] > summary h2::before { transform: rotate(90deg); }
+  details.settings > summary .hint { margin: 0; }
+  details.settings[open] > summary .hint { display: none; }
+
   /* --- Loading bunny --- runs across the pipeline area until the bookings arrive */
   .bunny-run { padding: 6px 0 2px; }
   .bunny-track { position: relative; height: 56px; overflow: hidden;
@@ -177,16 +187,18 @@
       <tbody id="bookingRows"><tr><td colspan="5">Loading…</td></tr></tbody>
     </table>
 
-    <h2>Security hold email</h2>
-    <div class="hint">This is the email the "Email hold link" button sends. You can use these placeholders and they'll be filled in for each guest: [FIRST_NAME], [NAME], [CHECKIN], [CHECKOUT], [AMOUNT], [LINK]. The [LINK] is added automatically at the end if you leave it out.</div>
+    <details class="settings">
+    <summary><h2>Security hold email</h2><span class="hint">rarely needs changing — tap to open</span></summary>
+    <div class="hint">This is the email the "Send hold link" button sends. You can use these placeholders and they'll be filled in for each guest: [FIRST_NAME], [NAME], [CHECKIN], [CHECKOUT], [AMOUNT], [LINK]. The [LINK] is added automatically at the end if you leave it out.</div>
     <label>Subject</label>
     <input id="h_subject">
     <label>Message</label>
     <textarea id="h_body" style="min-height:220px;"></textarea>
     <button class="btn" id="saveHoldBtn" type="button">Save hold email</button>
+    </details>
 
-
-    <h2>Check-in instructions</h2>
+    <details class="settings">
+    <summary><h2>Check-in instructions</h2><span class="hint">lockbox code, directions — tap to open</span></summary>
     <div class="hint">These feed both the guest page and the check-in emails. One line per bullet point. Use [CODE] wherever the lockbox code should appear — the real code is only ever shown in emails and links sent to guests.</div>
     <label>Warning banner</label>
     <input id="f_warning">
@@ -203,6 +215,7 @@
     <label>Contact phone shown in emails (optional)</label>
     <input id="f_contactPhone" style="max-width:240px;">
     <button class="btn" id="saveBtn" type="button">Save instructions</button>
+    </details>
 
   </div>
   <div id="status"></div>
