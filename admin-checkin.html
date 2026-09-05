@@ -451,7 +451,11 @@ function holdDetail(b) {
   } else if (b.cardLinkSent) parts.push('Card link sent ' + esc(shortDate(b.cardLinkSent)) + ', not saved yet');
   else if (b.status === 'Signed') parts.push('Card link not sent yet');
 
-  if (!idApproved(b) && !idDeclined(b) && (b.diditSessionId || b.idStatus)) parts.push('ID check started, not finished');
+  if (!idApproved(b) && !idDeclined(b) && (b.diditSessionId || b.idStatus)) {
+    // say what Didit says — "In Review", "Started", etc — rather than a generic "not finished"
+    var idWord = String(b.idStatus || 'started').replace(/_/g, ' ').toLowerCase();
+    parts.push('ID check ' + esc(idWord) + (b.idUpdated ? ' (' + esc(shortDate(b.idUpdated)) + ')' : ''));
+  }
   // check-in instructions — only worth saying once there's a stay to send them for
   if (b.checkinSent) parts.push('Check-in instructions sent');
   else if (b.calendarEventId && !b.isPast) parts.push('Check-in instructions not sent yet');
