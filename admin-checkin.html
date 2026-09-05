@@ -366,6 +366,21 @@ function progressBar(b) {
   return '<div class="progress"><div class="segs">' + segs + '</div><div class="seg-labels">' + labels + '</div></div>';
 }
 
+/* ---------- Hold window ----------
+   Must match HOLD_WINDOW_DAYS / HOLD_WINDOW_ANCHOR in Code.gs — the server enforces it,
+   this just tells Kim before she taps. */
+var HOLD_WINDOW_DAYS = 7;
+var HOLD_WINDOW_ANCHOR = 'checkout'; // 7 days before departure, so the hold outlives the stay
+function holdOpensIn(b) {
+  var iso = HOLD_WINDOW_ANCHOR === 'checkout' ? toIso(b.checkout) : (b.checkinIso || toIso(b.checkin));
+  if (!iso) return 0;
+  var p = iso.split('-'); if (p.length !== 3) return 0;
+  var target = new Date(+p[0], +p[1] - 1, +p[2]);
+  var today = new Date(); today.setHours(0, 0, 0, 0);
+  var n = Math.round((target - today) / 86400000);
+  return Math.max(0, n - HOLD_WINDOW_DAYS);
+}
+
 /* ---------- Countdown to check-in ---------- */
 function daysUntil(b) {
   var iso = b.checkinIso || toIso(b.checkin);
@@ -410,7 +425,10 @@ function holdDetail(b) {
   // dates for held/released/captured now sit under the bar, so only say what the bar can't
   if (holdIsFinal(b) && !b.isPast) parts.push('Hold was ' + hs + ' ' + shortDate(b.holdUpdated) + ' — a new hold is needed');
   else if (!hs && b.holdLinkSent) parts.push('Hold link sent ' + shortDate(b.holdLinkSent) + ', not authorised yet');
-  else if (!hs && b.status === 'Signed') parts.push('Hold link not sent yet');
+  else if (!hs && b.status === 'Signed') {
+    var oi = holdOpensIn(b);
+    parts.push(oi > 0 ? 'Hold link opens in ' + oi + ' day' + (oi === 1 ? '' : 's') : 'Hold link not sent yet');
+  }
 
   if (!idApproved(b) && !idDeclined(b) && (b.diditSessionId || b.idStatus)) parts.push('ID check started, not finished');
   // check-in instructions — only worth saying once there's a stay to send them for
@@ -517,8 +535,17 @@ function renderPipeline(bookings) {
       // email the security hold link straight from here — no copy/paste needed
       var holdBtn = document.createElement('button');
       holdBtn.className = 'btn small'; holdBtn.type = 'button';
-      holdBtn.textContent = b.holdLinkSent ? 'Resend hold link' : 'Send hold link';
+      var opensIn = holdOpensIn(b);
+      if (opensIn > 0 && !b.holdLinkSent) {
+        holdBtn.textContent = 'Hold link in ' + opensIn + ' day' + (opensIn === 1 ? '' : 's');
+        holdBtn.disabled = true;
+        holdBtn.title = 'Card holds only last 7 days, so the link waits until 7 days before ' + (HOLD_WINDOW_ANCHOR === 'checkout' ? 'check-out' : 'check-in');
+        holdBtn.style.background = '#c9cdc7'; holdBtn.style.color = '#4a554e'; holdBtn.style.cursor = 'default';
+      } else {
+        holdBtn.textContent = b.holdLinkSent ? 'Resend hold link' : 'Send hold link';
+      }
       holdBtn.addEventListener('click', function () {
+        if (holdBtn.disabled) return;
         if (!confirm('Email the security hold link to ' + b.guestName + ' (' + b.email + ')?')) return;
         holdBtn.disabled = true; pipelineStatus(b.bookingId, 'Sending…', true);
         var fd = new FormData();
@@ -536,7 +563,14 @@ function renderPipeline(bookings) {
       // no email on this booking, so the link has to be passed on by hand
       var depBtn = document.createElement('button');
       depBtn.className = 'btn small'; depBtn.type = 'button'; depBtn.textContent = 'Copy hold link';
+      var depOpensIn = holdOpensIn(b);
+      if (depOpensIn > 0) {
+        depBtn.textContent = 'Hold link in ' + depOpensIn + ' day' + (depOpensIn === 1 ? '' : 's');
+        depBtn.disabled = true;
+        depBtn.style.background = '#c9cdc7'; depBtn.style.color = '#4a554e'; depBtn.style.cursor = 'default';
+      }
       depBtn.addEventListener('click', function () {
+        if (depBtn.disabled) return;
         // shorten to a book.howquahideaway.com.au link first; fall back to the full link if that fails
         var longLink = pipelineDepositLink(b);
         depBtn.disabled = true; pipelineStatus(b.bookingId, 'Creating short link…', true);
