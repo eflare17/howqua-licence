@@ -550,7 +550,7 @@ function renderPipeline(bookings) {
       // the link went out with their signed licence — this is for chasing
       var cardBtn = document.createElement('button');
       cardBtn.className = 'btn small'; cardBtn.type = 'button';
-      cardBtn.textContent = b.cardLinkSent ? 'Resend card link' : 'Send card link';
+      cardBtn.textContent = 'Email card link'; // it always goes out with the licence first, so 'send' vs 'resend' just confuses
       cardBtn.addEventListener('click', function () {
         if (!confirm('Email the save-a-card link to ' + b.guestName + ' (' + b.email + ')?')) return;
         cardBtn.disabled = true; pipelineStatus(b.bookingId, 'Sending…', true);
@@ -746,7 +746,34 @@ document.getElementById('loginBtn').addEventListener('click', function () {
   // Stripe for every live hold), so starting it early is where the time is saved.
   loadPipeline();
   load(true);
+  startAutoRefresh();
 });
+
+/* ---------- Keep the pipeline current without Kim refreshing ----------
+   Refreshes when she comes back to the tab, and quietly every minute
+   while it's open. Never while she's in the middle of something. */
+var AUTO_REFRESH_MS = 60 * 1000;
+var autoRefreshTimer = null, lastPipelineLoad = 0;
+function busyOnPage() {
+  // charge form open, or typing in one of the settings fields
+  if (document.querySelector('.charge-form')) return true;
+  var a = document.activeElement;
+  return !!(a && (a.tagName === 'INPUT' || a.tagName === 'TEXTAREA') && a.id !== 'password');
+}
+function refreshIfSensible(force) {
+  if (!password || document.getElementById('adminPanel').style.display !== 'block') return;
+  if (busyOnPage()) return;
+  if (!force && Date.now() - lastPipelineLoad < 20000) return; // just loaded — don't hammer it
+  lastPipelineLoad = Date.now();
+  loadPipeline();
+}
+function startAutoRefresh() {
+  lastPipelineLoad = Date.now();
+  if (autoRefreshTimer) clearInterval(autoRefreshTimer);
+  autoRefreshTimer = setInterval(function () { if (!document.hidden) refreshIfSensible(false); }, AUTO_REFRESH_MS);
+  document.addEventListener('visibilitychange', function () { if (!document.hidden) refreshIfSensible(true); });
+  window.addEventListener('focus', function () { refreshIfSensible(false); });
+}
 document.getElementById('password').addEventListener('keydown', function (e) { if (e.key === 'Enter') document.getElementById('loginBtn').click(); });
 function buildSheetForImage(content) {
   // Laid out for a phone screen: narrow portrait sheet, large type.
