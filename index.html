@@ -863,6 +863,15 @@ document.getElementById('submitBtn').addEventListener('click', async () => {
     const sheet = document.getElementById('sheet');
     const sheetRect = sheet.getBoundingClientRect();
     statusEl.style.display = 'none'; // exclude the status message from the PDF capture — it's a live progress indicator, not part of the signed document
+    // Snapshot every block's position NOW, in the same frame as sheetRect. html2canvas takes a
+    // second or more, and anything that nudges the scroll position in that time (the status
+    // message, a late image, the signer's own thumb) would otherwise shift every slice.
+    const measured = new Map();
+    (function snapshot(el) {
+      const r = el.getBoundingClientRect();
+      measured.set(el, { top: r.top - sheetRect.top, height: r.height });
+      Array.from(el.children).forEach(snapshot);
+    })(sheet);
     const rendered = await window.html2canvas(sheet, { scale: 2.2, backgroundColor: '#ffffff' });
     statusEl.style.display = 'block';
     // measure the actual canvas-px-per-css-px ratio directly, rather than assuming it matches the scale option exactly
@@ -906,15 +915,19 @@ document.getElementById('submitBtn').addEventListener('click', async () => {
     // its own children (so a long clause with many paragraphs/list items still gets
     // clean internal breaks instead of being clipped or overflowing off the page)
     function placeBlock(el) {
-      const rect = el.getBoundingClientRect();
+      const rect = measured.get(el) || { top: 0, height: 0 };
       if (rect.height <= 0) return; // hidden elements
 
-      const topCanvasPx = (rect.top - sheetRect.top) * renderScale;
+      const topCanvasPx = rect.top * renderScale;
       const heightCanvasPx = rect.height * renderScale;
       const heightPt = heightCanvasPx * ptPerCanvasPx;
+      const spaceLeft = pageHeight - margin - cursorY;
+      const tooTallForAnyPage = heightPt > usablePageHeight;
+      // a block that won't fit what's left of this page, and is big enough that pushing it
+      // whole would leave a large blank, gets split at its own rows instead
+      const worthSplitting = heightPt > spaceLeft && heightPt > usablePageHeight * 0.25 && cursorY > margin;
 
-      if (heightPt > usablePageHeight && el.children.length > 0) {
-        // too tall for one page — break it up by its own child elements instead
+      if ((tooTallForAnyPage || worthSplitting) && el.children.length > 1) {
         Array.from(el.children).forEach(child => placeBlock(child));
       } else {
         placeSlice(topCanvasPx, heightCanvasPx);
