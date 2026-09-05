@@ -81,11 +81,21 @@ if (hash.startsWith('#data=')) {
   }
 }
 
-document.getElementById('bookingSummary').innerHTML =
-  '<div><b>Guest:</b> ' + (bookingData.licenseeName || '(not provided)') + '</div>' +
-  '<div><b>Check-in:</b> ' + (bookingData.checkin || '(not provided)') + '</div>' +
-  '<div><b>Check-out:</b> ' + (bookingData.checkout || '(not provided)') + '</div>' +
-  '<div><b>Charge cap:</b> $300 (only if there\'s damage)</div>';
+// Everything in the link came from a URL anyone can edit, so it's shown as text only.
+(function () {
+  const box = document.getElementById('bookingSummary');
+  box.textContent = '';
+  const row = function (label, value) {
+    const d = document.createElement('div');
+    const b = document.createElement('b'); b.textContent = label + ': ';
+    d.appendChild(b); d.appendChild(document.createTextNode(value));
+    box.appendChild(d);
+  };
+  row('Guest', bookingData.licenseeName || '(not provided)');
+  row('Check-in', bookingData.checkin || '(not provided)');
+  row('Check-out', bookingData.checkout || '(not provided)');
+  row('Charge cap', "$300 (only if there's damage)");
+})();
 
 // if we've just been returned from Stripe after the card was saved, show success and tell the backend to verify + record it
 const urlParams = new URLSearchParams(window.location.search);
@@ -120,14 +130,9 @@ document.getElementById('authorizeBondBtn').addEventListener('click', async () =
 
   try {
     // build the return URLs — same page, same booking data, with a flag so we know it succeeded
-    const baseUrl = window.location.origin + window.location.pathname;
-    const successUrl = baseUrl + '?paid=true&session_id={CHECKOUT_SESSION_ID}' + window.location.hash;
-    const cancelUrl = baseUrl + window.location.hash;
 
     const form = new FormData();
     form.append('type', 'create-card-session');
-    form.append('successUrl', successUrl);
-    form.append('cancelUrl', cancelUrl);
     form.append('bookingId', bookingData.bookingId || '');
     form.append('licenseeName', bookingData.licenseeName || '');
     form.append('licenseeEmail', bookingData.licenseeEmail || '');

@@ -34,7 +34,9 @@
   fetch(SCRIPT_URL + '?action=resolve&code=' + encodeURIComponent(code))
     .then(function (r) { return r.json(); })
     .then(function (d) {
-      if (d && d.success && d.url && /^https?:\/\//.test(d.url)) location.replace(d.url);
+      // only ever redirect within this site — belt and braces on top of the server-side rule
+      var ownSite = location.origin + '/';
+      if (d && d.success && d.url && String(d.url).indexOf(ownSite) === 0) location.replace(d.url);
       else notFound();
     })
     .catch(notFound);
