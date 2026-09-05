@@ -206,7 +206,7 @@
     </div>
     <div class="field-row">
       <div class="field">
-        <label>Incidental Security Hold (AUD)</label>
+        <label>Incidentals charge cap (AUD)</label>
         <input type="text" id="bond" value="$300.00">
       </div>
     </div>
@@ -234,9 +234,9 @@
   </details>
 
   <details class="clause" id="clause2">
-    <summary>2. Incidental Security Hold</summary>
+    <summary>2. Card on File for Incidentals</summary>
     <div class="clause-body">
-      <p>An incidental security hold of <b id="out-bond">[incidental security hold]</b> is placed on the Licensee's card via Stripe gateway payments prior to occupancy. No funds are charged unless a claim is made. The hold is released within 7 days of check-out, less any amount reasonably deducted by the Licensor for damage, excess cleaning, missing items, or breach of this Licence.</p>
+      <p>No security deposit is taken. Prior to occupancy the Licensee saves a payment card via Stripe, which the Licensor may retain on file and charge up to <b id="out-bond">[incidentals cap]</b> in total for damage, excess cleaning, missing items, or breach of this Licence. Nothing is charged unless such a claim arises, and the Licensee will be sent an itemised notice of the amount and reason before any charge is made. Card details are held by Stripe, not the Licensor, and are deleted automatically 14 days after check-out.</p>
     </div>
   </details>
 
@@ -388,7 +388,7 @@ bind('licensor', 'out-licensor', 'Kimberley Turner');
 bind('licenseeName', 'out-licensee', '[Guest Name]');
 bind('checkin', 'out-checkin', '[check-in]');
 bind('checkout', 'out-checkout', '[check-out]');
-bind('bond', 'out-bond', '[incidental security hold]');
+bind('bond', 'out-bond', '[incidentals cap]');
 
 document.getElementById('licensor').addEventListener('input', function () {
   document.getElementById('licensorSigLabel').textContent = 'Licensor Signature (' + (this.value.trim() || 'Kimberley Turner') + ')';
@@ -565,7 +565,7 @@ if (hash.startsWith('#prefill=')) {
     fieldIds.forEach(id => document.getElementById(id).dispatchEvent(new Event('input')));
     const adminStatus = document.getElementById('adminStatus');
     adminStatus.style.color = '#2b5540';
-    adminStatus.textContent = 'Booking request details loaded — add the incidental security hold, confirm the rules, then sign and generate the guest link.';
+    adminStatus.textContent = 'Booking request details loaded — check the incidentals cap, confirm the rules, then sign and generate the guest link.';
   } catch (e) {
     console.error('Failed to parse prefill data', e);
   }

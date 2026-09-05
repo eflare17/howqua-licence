@@ -70,6 +70,15 @@
   /* Arriving soon and still not signed — the only thing here that actually needs chasing */
   .pipeline-card.urgent { border-left-color: #a33; background: #fdf7f7; }
 
+  /* --- Charge card form (opens under the buttons) --- */
+  .charge-form { margin-top: 10px; padding: 12px 14px; border: 1px solid #e2ddd0; border-left: 4px solid #842029; border-radius: 6px; background: #fff; }
+  .charge-title { font-family: Arial, sans-serif; font-weight: bold; font-size: 15px; margin-bottom: 8px; }
+  .charge-row { margin-bottom: 8px; }
+  .charge-row label { font-size: 12px; margin-bottom: 3px; }
+  .charge-row input { margin-bottom: 0; }
+  .charge-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 6px; }
+  .charge-actions .btn.small { margin: 0; }
+
   /* --- Collapsible settings sections --- */
   details.settings { margin-top: 28px; border-top: 1px solid #e2ddd0; padding-top: 6px; }
   details.settings > summary { list-style: none; cursor: pointer; display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
@@ -149,7 +158,7 @@
 
   <div id="adminPanel">
     <h2>Booking pipeline</h2>
-    <div class="hint">Every booking, soonest stay first. The bar on each card shows how far along it is; finished stays fade to grey, and anything arriving within a week that is not signed, ID-verified and held turns red. Generate the signing link for new requests, send the guest their security hold link when you are ready, jump to the hold in Stripe, or send check-in instructions.</div>
+    <div class="hint">Every booking, soonest stay first. The bar on each card shows how far along it is; finished stays fade to grey, and anything arriving within a week that is not signed, ID-verified and card-on-file turns red. Generate the signing link for new requests, resend the card link if a guest hasn't saved one, charge a saved card if there's damage, or send check-in instructions.</div>
     <div id="pipelineList">
       <div class="bunny-run" aria-label="Loading bookings">
         <div class="bunny-track">
@@ -188,13 +197,13 @@
     </table>
 
     <details class="settings">
-    <summary><h2>Security hold email</h2><span class="hint">rarely needs changing — tap to open</span></summary>
-    <div class="hint">This is the email the "Send hold link" button sends. You can use these placeholders and they'll be filled in for each guest: [FIRST_NAME], [NAME], [CHECKIN], [CHECKOUT], [AMOUNT], [LINK]. The [LINK] is added automatically at the end if you leave it out.</div>
+    <summary><h2>Card-on-file email</h2><span class="hint">rarely needs changing — tap to open</span></summary>
+    <div class="hint">The save-a-card link goes out automatically with the guest's signed licence. This is the email "Resend card link" sends if they haven't done it. Placeholders: [FIRST_NAME], [NAME], [CHECKIN], [CHECKOUT], [AMOUNT] (the charge cap), [LINK]. The [LINK] is added automatically at the end if you leave it out.</div>
     <label>Subject</label>
     <input id="h_subject">
     <label>Message</label>
     <textarea id="h_body" style="min-height:220px;"></textarea>
-    <button class="btn" id="saveHoldBtn" type="button">Save hold email</button>
+    <button class="btn" id="saveHoldBtn" type="button">Save card email</button>
     </details>
 
     <details class="settings">
@@ -271,10 +280,19 @@ var STAGES = [
   { key: 'requested', label: 'Requested', color: '#c99700' },
   { key: 'signed',    label: 'Signed',    color: '#1a5289' },
   { key: 'id',        label: 'ID',        color: '#a0522d' },
-  { key: 'hold',      label: 'Hold',      color: '#0f766e' },
+  { key: 'card',      label: 'Card',      color: '#0f766e' },
   { key: 'checkin',   label: 'Check-in',  color: '#6b4fa0' },
-  { key: 'closed',    label: 'Released',  color: '#5a6b60' }
+  { key: 'closed',    label: 'Removed',   color: '#5a6b60' }
 ];
+// card-on-file state, written by the Stripe webhook / deposit page
+function cardOnFile(b) {
+  var cs = (b.cardStatus || '').toLowerCase();
+  return !!b.stripePaymentMethod && (cs === 'on file' || cs === 'charged' || cs === 'refunded');
+}
+function cardRemoved(b) { return (b.cardStatus || '').toLowerCase() === 'removed'; }
+function cardCharged(b) { var cs = (b.cardStatus || '').toLowerCase(); return cs === 'charged' || cs === 'refunded'; }
+// a booking made before card-on-file existed (Sep 2026) still carries a hold
+function isLegacyHold(b) { return !b.stripePaymentMethod && !!b.holdStatus; }
 // ID verification result, written to the sheet by the Didit webhook
 function idApproved(b) {
   var st = (b.idStatus || '').toLowerCase();
@@ -292,11 +310,12 @@ function milestones(b) {
   var hs = (b.holdStatus || '').toLowerCase();
   return {
     requested: true, // the row existing IS the request
-    signed:    b.status === 'Signed' || b.status === 'Deposit Held' || b.status === 'Completed' || !!b.signedOn,
+    signed:    b.status === 'Signed' || b.status === 'Deposit Held' || b.status === 'Card on file' || b.status === 'Completed' || !!b.signedOn,
     id:        idApproved(b),
-    hold:      hs === 'held' || (holdIsFinal(b) && b.isPast) || (b.status === 'Deposit Held' && !holdIsFinal(b)),
+    card:      cardOnFile(b) || (cardRemoved(b) && b.isPast)
+               || (isLegacyHold(b) && (hs === 'held' || (holdIsFinal(b) && b.isPast))),
     checkin:   !!b.checkinSent,
-    closed:    (holdIsFinal(b) && b.isPast) || b.status === 'Completed'
+    closed:    (cardRemoved(b) && b.isPast) || (isLegacyHold(b) && holdIsFinal(b) && b.isPast) || b.status === 'Completed'
   };
 }
 // how far along it is, for the card's left edge colour
@@ -336,9 +355,9 @@ function milestoneTimes(b) {
     requested: b.requestedOn || '',
     signed:    b.signedOn || '',
     id:        (idApproved(b) || idDeclined(b)) ? (b.idUpdated || '') : '',
-    hold:      hs === 'held' ? (b.holdUpdated || '') : '', // once released, Hold Updated is the release time, not the hold time
+    card:      b.cardSaved || (isLegacyHold(b) && hs === 'held' ? (b.holdUpdated || '') : ''),
     checkin:   b.checkinSentOn || '',
-    closed:    holdIsFinal(b) ? (b.holdUpdated || '') : ''
+    closed:    b.cardRemoved || (isLegacyHold(b) && holdIsFinal(b) ? (b.holdUpdated || '') : '')
   };
 }
 function progressBar(b) {
@@ -351,9 +370,12 @@ function progressBar(b) {
     var label = STAGES[i].label;
     var color = STAGES[i].color;
     if (STAGES[i].key === 'closed') { // say what actually happened to the money
-      if (hs === 'captured') { label = 'Captured'; color = '#842029'; }
-      else if (hs === 'refunded') { label = 'Refunded'; color = '#842029'; }
+      if (isLegacyHold(b) && hs === 'captured') { label = 'Captured'; color = '#842029'; }
+      else if (isLegacyHold(b) && hs === 'refunded') { label = 'Refunded'; color = '#842029'; }
+      else if (isLegacyHold(b)) { label = 'Released'; }
     }
+    if (STAGES[i].key === 'card' && !isLegacyHold(b) && cardCharged(b)) { label = 'Charged'; color = '#842029'; }
+    if (STAGES[i].key === 'card' && isLegacyHold(b)) { label = 'Hold'; }
     var done = m[STAGES[i].key];
     if (STAGES[i].key === 'id' && idDeclined(b)) { label = 'Declined'; color = '#842029'; done = true; }
     var t = done ? when[STAGES[i].key] : '';
@@ -366,20 +388,7 @@ function progressBar(b) {
   return '<div class="progress"><div class="segs">' + segs + '</div><div class="seg-labels">' + labels + '</div></div>';
 }
 
-/* ---------- Hold window ----------
-   Must match HOLD_WINDOW_DAYS / HOLD_WINDOW_ANCHOR in Code.gs — the server enforces it,
-   this just tells Kim before she taps. */
-var HOLD_WINDOW_DAYS = 7;
-var HOLD_WINDOW_ANCHOR = 'checkout'; // 7 days before departure, so the hold outlives the stay
-function holdOpensIn(b) {
-  var iso = HOLD_WINDOW_ANCHOR === 'checkout' ? toIso(b.checkout) : (b.checkinIso || toIso(b.checkin));
-  if (!iso) return 0;
-  var p = iso.split('-'); if (p.length !== 3) return 0;
-  var target = new Date(+p[0], +p[1] - 1, +p[2]);
-  var today = new Date(); today.setHours(0, 0, 0, 0);
-  var n = Math.round((target - today) / 86400000);
-  return Math.max(0, n - HOLD_WINDOW_DAYS);
-}
+var SECURITY_CAP_AUD = 300; // must match Code.gs
 
 /* ---------- Countdown to check-in ---------- */
 function daysUntil(b) {
@@ -398,14 +407,14 @@ function isUrgent(b) {
   var n = daysUntil(b);
   if (n === null || n < 0 || n > 7) return false;
   var m = milestones(b);
-  return !m.signed || !m.id || !m.hold;
+  return !m.signed || !m.id || !m.card;
 }
 function urgentReason(b) {
   var m = milestones(b);
   if (!m.signed) return 'Not signed yet';
   if (idDeclined(b)) return 'ID was declined';
   if (!m.id) return 'ID not verified yet';
-  if (!m.hold) return 'No hold on the card yet';
+  if (!m.card) return 'No card on file yet';
   return '';
 }
 function daysBadge(b) {
@@ -422,13 +431,17 @@ function daysBadge(b) {
 function holdDetail(b) {
   var parts = [];
   var hs = (b.holdStatus || '').toLowerCase();
-  // dates for held/released/captured now sit under the bar, so only say what the bar can't
-  if (holdIsFinal(b) && !b.isPast) parts.push('Hold was ' + hs + ' ' + shortDate(b.holdUpdated) + ' — a new hold is needed');
-  else if (!hs && b.holdLinkSent) parts.push('Hold link sent ' + shortDate(b.holdLinkSent) + ', not authorised yet');
-  else if (!hs && b.status === 'Signed') {
-    var oi = holdOpensIn(b);
-    parts.push(oi > 0 ? 'Hold link opens in ' + oi + ' day' + (oi === 1 ? '' : 's') : 'Hold link not sent yet');
-  }
+  if (isLegacyHold(b)) {
+    if (holdIsFinal(b) && !b.isPast) parts.push('Old-style hold was ' + hs + ' ' + shortDate(b.holdUpdated) + ' — resend the card link');
+    else if (hs === 'held') parts.push('Old-style hold on card');
+  } else if (cardOnFile(b)) {
+    parts.push((b.cardLast4 ? b.cardLast4.charAt(0).toUpperCase() + b.cardLast4.slice(1) : 'Card') + ' on file');
+    if (cardCharged(b) && b.chargeAmount) parts.push('Charged $' + b.chargeAmount + (b.chargeReason ? ' — ' + b.chargeReason.split(' | ').pop().replace(/^\$[\d.]+\s*/, '') : ''));
+  } else if (cardRemoved(b)) {
+    if (!b.isPast) parts.push('Card was removed ' + shortDate(b.cardRemoved) + ' — resend the card link');
+    else if (b.chargeAmount) parts.push('Charged $' + b.chargeAmount + ' before removal');
+  } else if (b.cardLinkSent) parts.push('Card link sent ' + shortDate(b.cardLinkSent) + ', not saved yet');
+  else if (b.status === 'Signed') parts.push('Card link not sent yet');
 
   if (!idApproved(b) && !idDeclined(b) && (b.diditSessionId || b.idStatus)) parts.push('ID check started, not finished');
   // check-in instructions — only worth saying once there's a stay to send them for
@@ -531,66 +544,109 @@ function renderPipeline(bookings) {
       diditLink.title = b.diditSessionId ? 'Didit session ' + b.diditSessionId : 'Open the Didit console';
       actions.appendChild(diditLink);
     }
-    if ((b.status === 'Signed' || b.status === 'Deposit Held') && b.email && !(holdIsFinal(b) && b.isPast)) {
-      // email the security hold link straight from here — no copy/paste needed
-      var holdBtn = document.createElement('button');
-      holdBtn.className = 'btn small'; holdBtn.type = 'button';
-      var opensIn = holdOpensIn(b);
-      if (opensIn > 0 && !b.holdLinkSent) {
-        holdBtn.textContent = 'Hold link in ' + opensIn + ' day' + (opensIn === 1 ? '' : 's');
-        holdBtn.disabled = true;
-        holdBtn.title = 'Card holds only last 7 days, so the link waits until 7 days before ' + (HOLD_WINDOW_ANCHOR === 'checkout' ? 'check-out' : 'check-in');
-        holdBtn.style.background = '#c9cdc7'; holdBtn.style.color = '#4a554e'; holdBtn.style.cursor = 'default';
-      } else {
-        holdBtn.textContent = b.holdLinkSent ? 'Resend hold link' : 'Send hold link';
-      }
-      holdBtn.addEventListener('click', function () {
-        if (holdBtn.disabled) return;
-        if (!confirm('Email the security hold link to ' + b.guestName + ' (' + b.email + ')?')) return;
-        holdBtn.disabled = true; pipelineStatus(b.bookingId, 'Sending…', true);
+    var signedish = b.status === 'Signed' || b.status === 'Deposit Held' || b.status === 'Card on file';
+    var needsCard = signedish && !cardOnFile(b) && !b.isPast && !(isLegacyHold(b) && (b.holdStatus || '').toLowerCase() === 'held');
+    if (needsCard && b.email) {
+      // the link went out with their signed licence — this is for chasing
+      var cardBtn = document.createElement('button');
+      cardBtn.className = 'btn small'; cardBtn.type = 'button';
+      cardBtn.textContent = b.cardLinkSent ? 'Resend card link' : 'Send card link';
+      cardBtn.addEventListener('click', function () {
+        if (!confirm('Email the save-a-card link to ' + b.guestName + ' (' + b.email + ')?')) return;
+        cardBtn.disabled = true; pipelineStatus(b.bookingId, 'Sending…', true);
         var fd = new FormData();
-        fd.append('type', 'send-hold-link'); fd.append('password', password);
-        fd.append('bookingId', b.bookingId); fd.append('depositLink', pipelineDepositLink(b));
+        fd.append('type', 'send-card-link'); fd.append('password', password);
+        fd.append('bookingId', b.bookingId);
         fetch(SCRIPT_URL, { method: 'POST', body: fd }).then(function (r) { return r.json(); }).then(function (res) {
-          pipelineStatus(b.bookingId, res.message || (res.success ? '✓ Hold link emailed.' : 'Failed.'), res.success);
-          holdBtn.disabled = false;
+          pipelineStatus(b.bookingId, res.message || (res.success ? '✓ Card link emailed.' : 'Failed.'), res.success);
+          cardBtn.disabled = false;
           if (res.success) loadPipeline();
-        }).catch(function (e) { pipelineStatus(b.bookingId, 'Could not send: ' + e.message, false); holdBtn.disabled = false; });
+        }).catch(function (e) { pipelineStatus(b.bookingId, 'Could not send: ' + e.message, false); cardBtn.disabled = false; });
       });
-      actions.appendChild(holdBtn);
+      actions.appendChild(cardBtn);
     }
-    if ((b.status === 'Signed' || b.status === 'Deposit Held') && !b.email && !(holdIsFinal(b) && b.isPast)) {
+    if (needsCard && !b.email) {
       // no email on this booking, so the link has to be passed on by hand
       var depBtn = document.createElement('button');
-      depBtn.className = 'btn small'; depBtn.type = 'button'; depBtn.textContent = 'Copy hold link';
-      var depOpensIn = holdOpensIn(b);
-      if (depOpensIn > 0) {
-        depBtn.textContent = 'Hold link in ' + depOpensIn + ' day' + (depOpensIn === 1 ? '' : 's');
-        depBtn.disabled = true;
-        depBtn.style.background = '#c9cdc7'; depBtn.style.color = '#4a554e'; depBtn.style.cursor = 'default';
-      }
+      depBtn.className = 'btn small'; depBtn.type = 'button'; depBtn.textContent = 'Copy card link';
       depBtn.addEventListener('click', function () {
-        if (depBtn.disabled) return;
-        // shorten to a book.howquahideaway.com.au link first; fall back to the full link if that fails
         var longLink = pipelineDepositLink(b);
         depBtn.disabled = true; pipelineStatus(b.bookingId, 'Creating short link…', true);
         var fd = new FormData();
         fd.append('type', 'shorten'); fd.append('longUrl', longLink);
         fetch(SCRIPT_URL, { method: 'POST', body: fd }).then(function (r) { return r.json(); }).then(function (res) {
           depBtn.disabled = false;
-          copyWithFallback((res.success && res.shortUrl) ? res.shortUrl : longLink, b.bookingId, '✓ Hold link copied — no email on this booking, so text or message it to the guest.');
+          copyWithFallback((res.success && res.shortUrl) ? res.shortUrl : longLink, b.bookingId, '✓ Card link copied — no email on this booking, so text or message it to the guest.');
         }).catch(function () {
           depBtn.disabled = false;
-          copyWithFallback(longLink, b.bookingId, '✓ Hold link copied (full-length — shortener unavailable).');
+          copyWithFallback(longLink, b.bookingId, '✓ Card link copied (full-length — shortener unavailable).');
         });
       });
       actions.appendChild(depBtn);
     }
-    if (b.status === 'Deposit Held' && b.stripeReference) {
+    if (cardOnFile(b)) {
+      // ---- Charge card: amount + reason, guest is emailed the notice first ----
+      var chargeBtn = document.createElement('button');
+      chargeBtn.className = 'btn small'; chargeBtn.type = 'button'; chargeBtn.textContent = 'Charge card';
+      chargeBtn.style.background = '#842029';
+      chargeBtn.addEventListener('click', function () {
+        var existing = card.querySelector('.charge-form');
+        if (existing) { existing.remove(); return; }
+        var already = parseFloat(String(b.chargeAmount || '0').replace(/[^0-9.]/g, '')) || 0;
+        var left = Math.max(0, SECURITY_CAP_AUD - already);
+        var f = document.createElement('div');
+        f.className = 'charge-form';
+        f.innerHTML =
+          '<div class="charge-title">Charge ' + b.guestName + '\u2019s card <span class="hint" style="display:inline;margin:0;">(up to $' + left.toFixed(2) + ' remaining of the $' + SECURITY_CAP_AUD + ' cap)</span></div>' +
+          '<div class="charge-row"><label>Amount ($)</label><input type="text" inputmode="decimal" class="charge-amount" placeholder="e.g. 45.00"></div>' +
+          '<div class="charge-row"><label>Reason \u2014 the guest reads this</label><input type="text" class="charge-reason" placeholder="e.g. Broken bedside lamp, replacement cost"></div>' +
+          '<div class="charge-actions"><button type="button" class="btn small charge-go" style="background:#842029;">Email notice &amp; charge</button>' +
+          '<button type="button" class="btn small charge-cancel" style="background:#888;">Cancel</button></div>';
+        card.querySelector('.pipeline-actions').after(f);
+        f.querySelector('.charge-cancel').addEventListener('click', function () { f.remove(); });
+        f.querySelector('.charge-go').addEventListener('click', function () {
+          var amt = parseFloat(f.querySelector('.charge-amount').value.replace(/[^0-9.]/g, ''));
+          var reason = f.querySelector('.charge-reason').value.trim();
+          if (!amt || amt <= 0) { pipelineStatus(b.bookingId, 'Enter an amount.', false); return; }
+          if (amt > left + 0.001) { pipelineStatus(b.bookingId, 'That is over the remaining cap of $' + left.toFixed(2) + '.', false); return; }
+          if (!reason) { pipelineStatus(b.bookingId, 'Enter a reason \u2014 the guest sees it.', false); return; }
+          if (!confirm('Charge $' + amt.toFixed(2) + ' to ' + b.guestName + '\u2019s card for: ' + reason + '\n\nThey will be emailed this notice first. Go ahead?')) return;
+          f.querySelector('.charge-go').disabled = true; pipelineStatus(b.bookingId, 'Emailing notice, then charging\u2026', true);
+          var fd = new FormData();
+          fd.append('type', 'charge-card'); fd.append('password', password);
+          fd.append('bookingId', b.bookingId); fd.append('amount', amt.toFixed(2)); fd.append('reason', reason);
+          fetch(SCRIPT_URL, { method: 'POST', body: fd }).then(function (r) { return r.json(); }).then(function (res) {
+            pipelineStatus(b.bookingId, res.message || (res.success ? '\u2713 Charged.' : 'Failed.'), res.success);
+            if (res.success) { f.remove(); loadPipeline(); } else { f.querySelector('.charge-go').disabled = false; }
+          }).catch(function (e) { pipelineStatus(b.bookingId, 'Could not charge: ' + e.message, false); f.querySelector('.charge-go').disabled = false; });
+        });
+        f.querySelector('.charge-amount').focus();
+      });
+      actions.appendChild(chargeBtn);
+
+      // ---- Remove card early (it goes automatically 14 days after check-out) ----
+      var rmBtn = document.createElement('button');
+      rmBtn.className = 'btn small'; rmBtn.type = 'button'; rmBtn.textContent = 'Remove card';
+      rmBtn.style.background = '#888';
+      rmBtn.addEventListener('click', function () {
+        if (!confirm('Delete ' + b.guestName + '\u2019s saved card from Stripe now? It cannot be charged after this.\n(It would be deleted automatically 14 days after check-out anyway.)')) return;
+        rmBtn.disabled = true; pipelineStatus(b.bookingId, 'Removing\u2026', true);
+        var fd = new FormData();
+        fd.append('type', 'remove-card'); fd.append('password', password); fd.append('bookingId', b.bookingId);
+        fetch(SCRIPT_URL, { method: 'POST', body: fd }).then(function (r) { return r.json(); }).then(function (res) {
+          pipelineStatus(b.bookingId, res.message || (res.success ? '\u2713 Card removed.' : 'Failed.'), res.success);
+          if (res.success) loadPipeline(); else rmBtn.disabled = false;
+        }).catch(function (e) { pipelineStatus(b.bookingId, 'Could not remove: ' + e.message, false); rmBtn.disabled = false; });
+      });
+      actions.appendChild(rmBtn);
+    }
+    if (b.stripeCustomer || b.stripeReference) {
       var stripeLink = document.createElement('a');
       stripeLink.className = 'btn small'; stripeLink.target = '_blank'; stripeLink.textContent = 'View in Stripe';
       // account ID pinned so it always opens Howqua's Stripe account, even if another account is active in the browser
-      stripeLink.href = 'https://dashboard.stripe.com/acct_1U7YnNIvavyq88hu/payments/' + b.stripeReference; // live mode — add /test/ back before /payments/ if ever switched to test keys
+      stripeLink.href = b.stripeCustomer
+        ? 'https://dashboard.stripe.com/acct_1U7YnNIvavyq88hu/customers/' + b.stripeCustomer
+        : 'https://dashboard.stripe.com/acct_1U7YnNIvavyq88hu/payments/' + b.stripeReference; // legacy hold
       actions.appendChild(stripeLink);
     }
     if (b.calendarEventId) {

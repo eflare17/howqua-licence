@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Incidental Security Hold — Howqua Hideaway</title>
+<title>Save a card for your stay — Howqua Hideaway</title>
 <style>
   body { background: #e9e4d8; margin: 0; padding: 20px; }
   .sheet {
@@ -41,18 +41,20 @@
   <div class="logo-wrap">
     <img src="https://book.howquahideaway.com.au/logo.png" onerror="this.style.display='none'">
   </div>
-  <h1>INCIDENTAL SECURITY HOLD</h1>
+  <h1>SAVE A CARD FOR YOUR STAY</h1>
   <div class="subhead">Howqua Hideaway&nbsp;&nbsp;|&nbsp;&nbsp;484 Howqua River Road, Howqua VIC 3723</div>
 
   <div class="booking-summary" id="bookingSummary"></div>
 
   <div id="bondHoldSection">
-    <h2>Incidental Security Hold</h2>
-    <div style="font-size: 13px; color: #666; margin-bottom: 14px;">
-      You'll be taken to Stripe's secure payment page to enter your card details. Your card will be <b>authorized</b> for the incidental security hold amount (<span id="depositAmountInline">$0.00</span>) — this places a temporary hold, it does not charge you. The Licensor will release the hold after checkout if there's no damage, or claim against it if there is. Authorization holds also expire automatically after a few days if not actioned.
+    <h2>No deposit today</h2>
+    <div style="font-size: 14px; color: #444; margin-bottom: 14px; line-height: 1.55;">
+      We keep a card on file to cover any damage or incidentals. <b>Nothing is charged now.</b>
+      If something does need charging after your stay, you'll be told what and why first, and it will never be more than
+      <b><span id="depositAmountInline">$300</span></b>. Your card details are deleted automatically 14 days after check-out.
     </div>
     <div style="text-align:center;">
-      <button id="authorizeBondBtn">Continue to Stripe to Authorize Hold</button>
+      <button id="authorizeBondBtn">Save my card securely with Stripe</button>
     </div>
     <div class="stripe-note">🔒 Payments handled securely by Stripe — your card details never touch this site.</div>
     <div id="bondHoldStatus" style="text-align:center; margin-top: 10px; font-size: 13px;"></div>
@@ -83,16 +85,15 @@ document.getElementById('bookingSummary').innerHTML =
   '<div><b>Guest:</b> ' + (bookingData.licenseeName || '(not provided)') + '</div>' +
   '<div><b>Check-in:</b> ' + (bookingData.checkin || '(not provided)') + '</div>' +
   '<div><b>Check-out:</b> ' + (bookingData.checkout || '(not provided)') + '</div>' +
-  '<div><b>Security hold:</b> ' + (bookingData.bond || '(not provided)') + '</div>';
-document.getElementById('depositAmountInline').textContent = bookingData.bond || '(not set)';
+  '<div><b>Charge cap:</b> $300 (only if there\'s damage)</div>';
 
-// if we've just been returned from Stripe after a successful hold, show success and notify Kim
+// if we've just been returned from Stripe after the card was saved, show success and tell the backend to verify + record it
 const urlParams = new URLSearchParams(window.location.search);
 if (urlParams.get('paid') === 'true') {
   document.getElementById('authorizeBondBtn').style.display = 'none';
   const holdStatus = document.getElementById('bondHoldStatus');
   holdStatus.style.color = '#2b5540';
-  holdStatus.textContent = '✓ Incidental security hold authorized. You can close this page now.';
+  holdStatus.textContent = '✓ Card saved. Nothing has been charged. You can close this page now.';
 
   // only notify once per session — a refresh of this page shouldn't re-email Kim
   const notifiedKey = 'notified_' + (urlParams.get('session_id') || '');
@@ -100,11 +101,11 @@ if (urlParams.get('paid') === 'true') {
   if (!alreadyNotified) {
   try { sessionStorage.setItem(notifiedKey, '1'); } catch (e) {}
   const notifyForm = new FormData();
-  notifyForm.append('type', 'notify-deposit-authorized');
+  notifyForm.append('type', 'notify-card-saved');
   notifyForm.append('bookingId', bookingData.bookingId || '');
   notifyForm.append('licenseeName', bookingData.licenseeName || 'Guest');
   notifyForm.append('bond', bookingData.bond || '');
-  notifyForm.append('bondHoldRef', urlParams.get('session_id') || '');
+  notifyForm.append('sessionId', urlParams.get('session_id') || '');
   fetch(APPS_SCRIPT_URL, { method: 'POST', body: notifyForm }).catch(() => {});
   }
 }
@@ -124,12 +125,12 @@ document.getElementById('authorizeBondBtn').addEventListener('click', async () =
     const cancelUrl = baseUrl + window.location.hash;
 
     const form = new FormData();
-    form.append('type', 'create-checkout-session');
-    form.append('amount', bookingData.bond || '0');
+    form.append('type', 'create-card-session');
     form.append('successUrl', successUrl);
     form.append('cancelUrl', cancelUrl);
     form.append('bookingId', bookingData.bookingId || '');
     form.append('licenseeName', bookingData.licenseeName || '');
+    form.append('licenseeEmail', bookingData.licenseeEmail || '');
     form.append('checkin', bookingData.checkin || '');
     form.append('checkout', bookingData.checkout || '');
     const resp = await fetch(APPS_SCRIPT_URL, { method: 'POST', body: form });
@@ -137,7 +138,7 @@ document.getElementById('authorizeBondBtn').addEventListener('click', async () =
 
     if (!result.success) {
       holdStatus.style.color = '#a33';
-      holdStatus.textContent = 'Could not start incidental security hold: ' + (result.message || 'unknown error');
+      holdStatus.textContent = 'Could not open the card page: ' + (result.message || 'unknown error');
       authorizeBtn.disabled = false;
       return;
     }
