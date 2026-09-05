@@ -113,7 +113,11 @@
       .cal-day { min-height: 40px; display: flex; align-items: center; justify-content: center; }
       .cal-nav { width: 40px; height: 40px; font-size: 18px; }
     }
-  </style>
+    .cal-day.cal-peak { background: #fbf3e4; }
+  .cal-day.cal-peak.cal-in-range { background: #cde0d1; }
+  .cal-day.cal-peak.cal-selected-start, .cal-day.cal-peak.cal-selected-end { background: #2b5540; }
+  .cal-day.cal-peak.cal-booked { background: #fdf2f2; }
+</style>
 </head>
 <body>
 <div class="sheet" id="sheet">
@@ -152,9 +156,9 @@
       <div class="field">
         <label>Booking Type</label>
         <select id="bookingType">
-          <option value="minimoon">Mini-Moon Package (min 3 nights)</option>
-          <option value="anniversary">Anniversary Package (min 2 nights)</option>
-          <option value="standard">Standard Stay (min 2 nights)</option>
+          <option value="minimoon">Mini-Moon Package (min 3 nights · 11am in, 2pm out)</option>
+          <option value="anniversary">Anniversary Package (min 2 nights · 3pm in, 10am out)</option>
+          <option value="standard">Standard Stay (min 2 nights · 3pm in, 10am out)</option>
         </select>
       </div>
     </div>
@@ -263,6 +267,40 @@ let rangeStart = null;
 let rangeEnd = null;
 let hoverDate = null;
 const minNightsByType = { minimoon: 3, anniversary: 2, standard: 2 };
+// Check-in / check-out times per package. These get stamped onto the dates the guest picks,
+// so they flow through to the licence, the emails and the calendar automatically.
+const checkTimesByType = {
+  minimoon:    { checkin: '11:00am', checkout: '2:00pm'  },
+  anniversary: { checkin: '3:00pm',  checkout: '10:00am' },
+  standard:    { checkin: '3:00pm',  checkout: '10:00am' }
+};
+function checkTimes(type) { return checkTimesByType[type] || checkTimesByType.standard; }
+// Peak seasons: any stay that includes a night in one of these windows must be at least
+// minNights long. Dates are inclusive. Add a line per season; update the year each year.
+const PEAK_SEASONS = [
+  { from: '2026-12-21', to: '2027-01-27', minNights: 5, label: 'Peak season (21 Dec – 27 Jan)' }
+];
+function peakSeasonFor(d) {
+  const key = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+  return PEAK_SEASONS.find(p => key >= p.from && key <= p.to) || null;
+}
+// the minimum nights this particular stay needs: the package's own minimum, raised to the
+// peak minimum if any night of the stay (check-in day up to the night before check-out) is peak
+function requiredNights(start, end, type) {
+  let min = minNightsByType[type] || 2;
+  let peak = null;
+  if (start) {
+    const cursor = new Date(start);
+    const stop = end ? new Date(end) : new Date(start.getTime() + 24 * 60 * 60 * 1000);
+    while (cursor < stop) {
+      const p = peakSeasonFor(cursor);
+      if (p) { peak = p; break; }
+      cursor.setDate(cursor.getDate() + 1);
+    }
+  }
+  if (peak && peak.minNights > min) min = peak.minNights;
+  return { nights: min, peak: peak };
+}
 const MIN_NOTICE_DAYS = 5; // guests can't check in sooner than this many days from today
 function earliestCheckin() {
   const d = new Date();
@@ -338,9 +376,10 @@ function renderCalendar() {
     cell.textContent = day;
     cell.dataset.time = d.getTime();
 
-    const minNights = minNightsByType[document.getElementById('bookingType').value];
     const tooSoonForCheckout = rangeStart && !rangeEnd && d > rangeStart &&
-      Math.round((d - rangeStart) / (1000 * 60 * 60 * 24)) < minNights;
+      Math.round((d - rangeStart) / (1000 * 60 * 60 * 24)) < requiredNights(rangeStart, d, document.getElementById('bookingType').value).nights;
+    const peakDay = peakSeasonFor(d);
+    if (peakDay) { cell.classList.add('cal-peak'); cell.title = peakDay.label + ' — ' + peakDay.minNights + ' night minimum'; }
     const dateKey = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
     const isBooked = busyDates.has(dateKey);
 
@@ -435,7 +474,8 @@ function handleDayClick(d) {
 
 function updateSummary() {
   if (rangeStart && rangeEnd) {
-    rangeSummaryEl.textContent = 'Check-in: ' + formatNice(rangeStart) + '   →   Check-out: ' + formatNice(rangeEnd);
+    const t = checkTimes(document.getElementById('bookingType').value);
+    rangeSummaryEl.textContent = 'Check-in: ' + formatNice(rangeStart) + ' from ' + t.checkin + '   →   Check-out: ' + formatNice(rangeEnd) + ' by ' + t.checkout;
   } else if (rangeStart) {
     rangeSummaryEl.textContent = 'Check-in: ' + formatNice(rangeStart) + '   —   now click your check-out date';
   } else {
@@ -445,7 +485,7 @@ function updateSummary() {
 
 document.getElementById('bookingType').addEventListener('change', () => {
   if (rangeStart && rangeEnd) {
-    const minNights = minNightsByType[document.getElementById('bookingType').value];
+    const minNights = requiredNights(rangeStart, rangeEnd, document.getElementById('bookingType').value).nights;
     const nights = Math.round((rangeEnd - rangeStart) / (1000 * 60 * 60 * 24));
     if (nights < minNights) {
       rangeEnd = null; // no longer meets the new package's minimum — ask them to re-pick check-out
@@ -472,11 +512,13 @@ document.getElementById('submitBtn').addEventListener('click', async () => {
 
   const firstName = document.getElementById('licenseeFirstName').value.trim();
   const lastName = document.getElementById('licenseeLastName').value.trim();
+  const bookingTypeSelectEarly = document.getElementById('bookingType');
   const name = (firstName + ' ' + lastName).trim();
   const phone = document.getElementById('licenseePhone').value.trim();
   const email = document.getElementById('licenseeEmail').value.trim();
-  const checkin = rangeStart ? formatNice(rangeStart) : '';
-  const checkout = rangeEnd ? formatNice(rangeEnd) : '';
+  const times = checkTimes(bookingTypeSelectEarly.value);
+  const checkin = rangeStart ? formatNice(rangeStart) + ', ' + times.checkin : '';
+  const checkout = rangeEnd ? formatNice(rangeEnd) + ', ' + times.checkout : '';
   const occupants = Math.min(4, Math.max(1, parseInt(document.getElementById('occupants').value, 10) || 1));
   const message = document.getElementById('message').value.trim();
   const bookingTypeSelect = document.getElementById('bookingType');
@@ -495,11 +537,13 @@ document.getElementById('submitBtn').addEventListener('click', async () => {
     return;
   }
 
-  const minNights = { minimoon: 3, anniversary: 2, standard: 2 };
+  const req = requiredNights(rangeStart, rangeEnd, bookingType);
   const nightsSelected = rangeStart && rangeEnd ? Math.round((rangeEnd - rangeStart) / (1000 * 60 * 60 * 24)) : 0;
-  if (nightsSelected < minNights[bookingType]) {
+  if (nightsSelected < req.nights) {
     statusEl.style.color = '#a33';
-    statusEl.textContent = 'The ' + bookingTypeLabel.split(' (')[0] + ' requires a minimum stay of ' + minNights[bookingType] + ' nights — please adjust your dates.';
+    statusEl.textContent = (req.peak && req.peak.minNights === req.nights)
+      ? req.peak.label + ' has a minimum stay of ' + req.nights + ' nights — please adjust your dates.'
+      : 'The ' + bookingTypeLabel.split(' (')[0] + ' requires a minimum stay of ' + req.nights + ' nights — please adjust your dates.';
     return;
   }
 
