@@ -148,7 +148,13 @@
       select { width: 100%; max-width: 100%; }
       #clearSigLicensor, #clearSigGuest { padding: 10px 4px; }
     }
-  </style>
+    #pdfCover { position: fixed; inset: 0; z-index: 9999; display: none; align-items: center; justify-content: center;
+    background: #f4f1ea; font-family: Arial, sans-serif; font-size: 18px; color: #2b5540; }
+  .pdf-cover-inner { display: flex; flex-direction: column; align-items: center; gap: 14px; }
+  .pdf-cover-spin { width: 34px; height: 34px; border: 4px solid #d8d4ca; border-top-color: #2b5540; border-radius: 50%;
+    animation: pdf-cover-spin 0.9s linear infinite; }
+  @keyframes pdf-cover-spin { to { transform: rotate(360deg); } }
+</style>
 </head>
 <body>
 <div class="sheet" id="sheet">
@@ -1040,12 +1046,29 @@ function enterPdfMode() {
     gc.insertAdjacentElement('afterend', img);
     gc.classList.add('pdf-hide');
   }
+  // The capture needs the page scrolled to the top, which is a visible jump for the signer.
+  // Hide it behind a cover, remember where they were, and put them back in exitPdfMode().
+  window.__pdfScrollY = window.scrollY || window.pageYOffset || 0;
+  var cover = document.getElementById('pdfCover');
+  if (!cover) {
+    cover = document.createElement('div');
+    cover.id = 'pdfCover';
+    cover.setAttribute('aria-live', 'polite');
+    cover.innerHTML = '<div class="pdf-cover-inner"><div class="pdf-cover-spin"></div>Preparing your signed licence…</div>';
+    document.body.appendChild(cover);
+  }
+  cover.style.display = 'flex';
   document.body.classList.add('pdf-mode');
   window.scrollTo(0, 0);
 }
 function exitPdfMode() {
   if (!document.body.classList.contains('pdf-mode')) return;
   document.body.classList.remove('pdf-mode');
+  var cover = document.getElementById('pdfCover');
+  var y = window.__pdfScrollY || 0;
+  // restore position before the cover lifts, so the signer never sees the top of the page
+  window.scrollTo(0, y);
+  requestAnimationFrame(function () { window.scrollTo(0, y); if (cover) cover.style.display = 'none'; });
   document.querySelectorAll('.pdf-value, #guestSigPdfImg').forEach(el => el.remove());
   const gc = document.getElementById('sigPadGuest');
   if (gc) gc.classList.remove('pdf-hide');
