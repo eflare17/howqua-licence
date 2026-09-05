@@ -379,16 +379,24 @@ function progressBar(b) {
     var done = m[STAGES[i].key];
     if (STAGES[i].key === 'id' && idDeclined(b)) { label = 'Declined'; color = '#842029'; done = true; }
     var t = done ? when[STAGES[i].key] : '';
-    var tip = t ? ' title="' + label + ': ' + longDate(t).replace(/"/g, '&quot;') + '"' : '';
+    var tip = t ? ' title="' + esc(label + ': ' + longDate(t)) + '"' : '';
     segs += '<div class="seg" style="background:' + (done ? color : '#e4e0d6') + ';"' + tip + '></div>';
     labels += '<div class="seg-label' + (done ? ' done' : '') + (i === next ? ' now' : '') + '"' +
       (done ? ' style="color:' + color + ';"' : '') + tip + '>' + label +
-      (t ? '<span class="seg-date">' + shortDate(t) + '</span>' : '') + '</div>';
+      (t ? '<span class="seg-date">' + esc(shortDate(t)) + '</span>' : '') + '</div>';
   }
   return '<div class="progress"><div class="segs">' + segs + '</div><div class="seg-labels">' + labels + '</div></div>';
 }
 
 var SECURITY_CAP_AUD = 300; // must match Code.gs
+
+// Everything from the sheet started life as something a guest typed into a public form.
+// Escape it before it goes anywhere near innerHTML, or a "name" like <script>… runs as Kim.
+function esc(v) {
+  return String(v == null ? '' : v)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
 
 /* ---------- Countdown to check-in ---------- */
 function daysUntil(b) {
@@ -432,15 +440,15 @@ function holdDetail(b) {
   var parts = [];
   var hs = (b.holdStatus || '').toLowerCase();
   if (isLegacyHold(b)) {
-    if (holdIsFinal(b) && !b.isPast) parts.push('Old-style hold was ' + hs + ' ' + shortDate(b.holdUpdated) + ' — resend the card link');
+    if (holdIsFinal(b) && !b.isPast) parts.push('Old-style hold was ' + esc(hs) + ' ' + esc(shortDate(b.holdUpdated)) + ' — resend the card link');
     else if (hs === 'held') parts.push('Old-style hold on card');
   } else if (cardOnFile(b)) {
-    parts.push((b.cardLast4 ? b.cardLast4.charAt(0).toUpperCase() + b.cardLast4.slice(1) : 'Card') + ' on file');
-    if (cardCharged(b) && b.chargeAmount) parts.push('Charged $' + b.chargeAmount + (b.chargeReason ? ' — ' + b.chargeReason.split(' | ').pop().replace(/^\$[\d.]+\s*/, '') : ''));
+    parts.push(esc(b.cardLast4 ? b.cardLast4.charAt(0).toUpperCase() + b.cardLast4.slice(1) : 'Card') + ' on file');
+    if (cardCharged(b) && b.chargeAmount) parts.push('Charged $' + esc(b.chargeAmount) + (b.chargeReason ? ' — ' + esc(b.chargeReason.split(' | ').pop().replace(/^\$[\d.]+\s*/, '')) : ''));
   } else if (cardRemoved(b)) {
-    if (!b.isPast) parts.push('Card was removed ' + shortDate(b.cardRemoved) + ' — resend the card link');
-    else if (b.chargeAmount) parts.push('Charged $' + b.chargeAmount + ' before removal');
-  } else if (b.cardLinkSent) parts.push('Card link sent ' + shortDate(b.cardLinkSent) + ', not saved yet');
+    if (!b.isPast) parts.push('Card was removed ' + esc(shortDate(b.cardRemoved)) + ' — resend the card link');
+    else if (b.chargeAmount) parts.push('Charged $' + esc(b.chargeAmount) + ' before removal');
+  } else if (b.cardLinkSent) parts.push('Card link sent ' + esc(shortDate(b.cardLinkSent)) + ', not saved yet');
   else if (b.status === 'Signed') parts.push('Card link not sent yet');
 
   if (!idApproved(b) && !idDeclined(b) && (b.diditSessionId || b.idStatus)) parts.push('ID check started, not finished');
@@ -511,15 +519,15 @@ function renderPipeline(bookings) {
     card.innerHTML =
       '<div class="pipeline-top"><div style="min-width:0;">' +
         propertyLabel(b) +
-        '<div class="pipeline-name">' + b.guestName + '</div>' +
-        '<div class="pipeline-meta">' + (b.checkin || '?') + ' → ' + (b.checkout || '?') + (b.bond ? ' · ' + b.bond : '') + (b.email ? '<br>' + b.email : '') + '</div>' +
-        '<div class="pipeline-id">' + b.bookingId + '</div>' +
+        '<div class="pipeline-name">' + esc(b.guestName) + '</div>' +
+        '<div class="pipeline-meta">' + esc(b.checkin || '?') + ' → ' + esc(b.checkout || '?') + (b.bond ? ' · ' + esc(b.bond) : '') + (b.email ? '<br>' + esc(b.email) : '') + '</div>' +
+        '<div class="pipeline-id">' + esc(b.bookingId) + '</div>' +
       '</div><div style="text-align:right;">' + daysBadge(b) + '</div></div>' +
       progressBar(b) +
       (warn ? '<div class="pipeline-warn">' + warn + ' &middot; arriving in ' + daysUntil(b) + ' day' + (daysUntil(b) === 1 ? '' : 's') + '</div>' : '') +
       (detail ? '<div class="pipeline-detail">' + detail + '</div>' : '') +
       '<div class="pipeline-actions"></div>' +
-      '<div class="pipeline-status" id="pstatus-' + b.bookingId + '"></div>';
+      '<div class="pipeline-status" id="pstatus-' + esc(b.bookingId) + '"></div>';
     var actions = card.querySelector('.pipeline-actions');
 
     if (b.status === 'Requested') {
@@ -527,7 +535,9 @@ function renderPipeline(bookings) {
       genBtn.className = 'btn small'; genBtn.type = 'button'; genBtn.textContent = 'Generate signing link';
       genBtn.addEventListener('click', function () {
         genBtn.disabled = true; pipelineStatus(b.bookingId, 'Generating…', true);
-        fetch(SCRIPT_URL + '?action=get-signing-link&password=' + encodeURIComponent(password) + '&bookingId=' + encodeURIComponent(b.bookingId))
+        var sfd = new FormData();
+        sfd.append('type', 'get-signing-link'); sfd.append('password', password); sfd.append('bookingId', b.bookingId);
+        fetch(SCRIPT_URL, { method: 'POST', body: sfd })
           .then(function (r) { return r.json(); })
           .then(function (res) {
             if (!res.success) { pipelineStatus(b.bookingId, res.message, false); genBtn.disabled = false; return; }
@@ -597,7 +607,7 @@ function renderPipeline(bookings) {
         var f = document.createElement('div');
         f.className = 'charge-form';
         f.innerHTML =
-          '<div class="charge-title">Charge ' + b.guestName + '\u2019s card <span class="hint" style="display:inline;margin:0;">(up to $' + left.toFixed(2) + ' remaining of the $' + SECURITY_CAP_AUD + ' cap)</span></div>' +
+          '<div class="charge-title">Charge ' + esc(b.guestName) + '\u2019s card <span class="hint" style="display:inline;margin:0;">(up to $' + left.toFixed(2) + ' remaining of the $' + SECURITY_CAP_AUD + ' cap)</span></div>' +
           '<div class="charge-row"><label>Amount ($)</label><input type="text" inputmode="decimal" class="charge-amount" placeholder="e.g. 45.00"></div>' +
           '<div class="charge-row"><label>Reason \u2014 the guest reads this</label><input type="text" class="charge-reason" placeholder="e.g. Broken bedside lamp, replacement cost"></div>' +
           '<div class="charge-actions"><button type="button" class="btn small charge-go" style="background:#842029;">Email notice &amp; charge</button>' +
@@ -692,10 +702,12 @@ function renderPipeline(bookings) {
   }
 }
 function loadPipeline() {
-  fetch(SCRIPT_URL + '?action=get-bookings&password=' + encodeURIComponent(password))
+  var pfd = new FormData();
+  pfd.append('type', 'get-bookings'); pfd.append('password', password);
+  fetch(SCRIPT_URL, { method: 'POST', body: pfd })
     .then(function (r) { return r.json(); })
     .then(function (res) {
-      if (!res.success) { document.getElementById('pipelineList').innerHTML = '<div class="hint">' + (res.message || 'Could not load bookings.') + '</div>'; return; }
+      if (!res.success) { document.getElementById('pipelineList').innerHTML = '<div class="hint">' + esc(res.message || 'Could not load bookings.') + '</div>'; return; }
       renderPipeline(res.bookings || []);
       if (res.sheetUrl) { document.getElementById('sheetLink').href = res.sheetUrl; document.getElementById('sheetLinkWrap').style.display = 'block'; }
     })
@@ -707,7 +719,7 @@ function renderBookings(bookings) {
   tbody.innerHTML = '';
   bookings.forEach(function (b) {
     var tr = document.createElement('tr');
-    tr.innerHTML = '<td data-label="Guest">' + b.guestName + '</td><td data-label="Check-in">' + b.checkin + '</td><td data-label="Email">' + (b.guestEmail || '—') + '</td>' +
+    tr.innerHTML = '<td data-label="Guest">' + esc(b.guestName) + '</td><td data-label="Check-in">' + esc(b.checkin) + '</td><td data-label="Email">' + esc(b.guestEmail || '—') + '</td>' +
       '<td data-label="Check-in email" class="' + (b.sent ? 'sent-yes' : 'sent-no') + '">' + (b.sent ? 'Sent ✓' : 'Not sent') + '</td><td class="actions"></td>';
     var btn = document.createElement('button');
     btn.className = 'btn small'; btn.type = 'button';
