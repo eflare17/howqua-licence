@@ -831,7 +831,7 @@ function renderPipeline(bookings) {
       var invLink = document.createElement('a');
       invLink.className = 'btn small'; invLink.target = '_blank'; invLink.rel = 'noopener'; invLink.textContent = 'View invoice';
       invLink.style.background = '#fff'; invLink.style.color = '#2b5540'; invLink.style.border = '1px solid #2b5540';
-      invLink.href = SCRIPT_URL + '?action=invoice&b=' + encodeURIComponent(b.bookingId) + '&t=' + encodeURIComponent(b.invoiceToken);
+      invLink.href = 'https://book.howquahideaway.com.au/invoice.html?b=' + encodeURIComponent(b.bookingId) + '&t=' + encodeURIComponent(b.invoiceToken);
       actions.appendChild(invLink);
     }
     if (b.stripeCustomer || b.stripeReference) {

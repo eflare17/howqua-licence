@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Your invoice — Howqua Hideaway</title>
+<style>
+  body { font-family: Georgia, 'Times New Roman', serif; background: #f4f1ea; margin: 0; padding: 24px 12px 48px; color: #2b2b2b; }
+  .wrap { max-width: 600px; margin: 0 auto; }
+  .notice { background: #fff; border-radius: 6px; box-shadow: 0 2px 12px rgba(0,0,0,0.12); padding: 28px 24px; text-align: center; }
+  .notice h1 { font-size: 22px; letter-spacing: 1px; margin: 0 0 10px; }
+  .notice p { font-family: Arial, sans-serif; font-size: 15px; line-height: 1.5; color: #555; margin: 0; }
+  .paid-banner { background: #2b5540; color: #fff; border-radius: 6px; padding: 16px 20px; text-align: center; font-family: Arial, sans-serif; font-size: 16px; line-height: 1.5; margin-bottom: 16px; }
+  .paid-banner b { font-size: 18px; display: block; margin-bottom: 4px; }
+  #sheet { box-shadow: 0 2px 12px rgba(0,0,0,0.12); border-radius: 6px; }
+  #sheet table[width="100%"] > tbody > tr > td[align="center"] { padding: 0 !important; } /* the backend's outer cream wrapper — we already have one */
+  .actions { margin-top: 18px; text-align: center; }
+  .btn { display: inline-block; background: #2b5540; color: #fff; border: none; border-radius: 5px; padding: 14px 26px; font-size: 16px; font-family: Arial, sans-serif; font-weight: bold; cursor: pointer; text-decoration: none; }
+  .btn:disabled { opacity: 0.6; cursor: default; }
+  .btn.plain { background: #fff; color: #2b5540; border: 1px solid #2b5540; font-weight: normal; }
+  .hint { font-family: Arial, sans-serif; font-size: 13px; color: #777; margin-top: 8px; line-height: 1.5; }
+  #status { font-family: Arial, sans-serif; font-size: 14px; color: #a33; margin-top: 10px; min-height: 18px; }
+  @media print { body { background: #fff; padding: 0; } .actions, .hint, #status { display: none; } #sheet { box-shadow: none; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div id="paidBanner" class="paid-banner" style="display:none;"></div>
+  <div id="loading" class="notice"><h1>Your invoice</h1><p>Loading&hellip;</p></div>
+  <div id="sheet" style="display:none;"></div>
+  <div id="actionsWrap" class="actions" style="display:none;">
+    <button class="btn" id="payBtn" type="button" style="display:none;">Pay by card</button>
+    <button class="btn plain" id="printBtn" type="button">Print / save as PDF</button>
+    <div class="hint" id="payHint" style="display:none;">Card payments are handled securely by Stripe. Direct deposit details are on the invoice above.</div>
+    <div id="status"></div>
+  </div>
+</div>
+
+<script>
+var APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyC4GkZR3bs8Wj2zg8z2oBrsn2JBdoxE0Jcasp298k_QJ8kwzsjKh7mciabOJNSjSVV/exec';
+
+function param(name) {
+  var m = new RegExp('[?&#]' + name + '=([^&#]*)').exec(location.href);
+  return m ? decodeURIComponent(m[1].replace(/\+/g, ' ')) : '';
+}
+var bookingId = param('b'), token = param('t');
+var wantPay = param('pay') === '1', returnedPaid = param('paid') === '1', sessionId = param('session_id');
+
+function post(type, extra) {
+  var fd = new FormData();
+  fd.append('type', type); fd.append('b', bookingId); fd.append('t', token);
+  Object.keys(extra || {}).forEach(function (k) { fd.append(k, extra[k]); });
+  return fetch(APPS_SCRIPT_URL, { method: 'POST', body: fd }).then(function (r) { return r.json(); });
+}
+function showNotice(title, msg) {
+  var el = document.getElementById('loading');
+  el.style.display = 'block';
+  el.innerHTML = '<h1></h1><p></p>';
+  el.querySelector('h1').textContent = title; el.querySelector('p').textContent = msg;
+}
+function setStatus(msg) { document.getElementById('status').textContent = msg || ''; }
+function esc(v) { return String(v == null ? '' : v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+
+function render(res) {
+  document.getElementById('loading').style.display = 'none';
+  var sheet = document.getElementById('sheet');
+  // the backend builds the invoice with inline styles only (no scripts) — token-gated and ours
+  sheet.innerHTML = res.html;
+  sheet.style.display = 'block';
+  document.getElementById('actionsWrap').style.display = 'block';
+  document.title = (res.invoiceNo || 'Invoice') + ' — Howqua Hideaway';
+  if (res.paid) {
+    var b = document.getElementById('paidBanner');
+    b.innerHTML = '<b>Thank you — this invoice is paid.</b>' + (res.paidOn ? 'Received ' + esc(res.paidOn) : '');
+    b.style.display = 'block';
+  }
+  var payBtn = document.getElementById('payBtn');
+  if (res.cardOffered && !res.paid) {
+    payBtn.style.display = 'inline-block';
+    payBtn.textContent = 'Pay ' + (res.amount || '') + ' by card';
+    document.getElementById('payHint').style.display = 'block';
+  }
+}
+function startCardPayment() {
+  var payBtn = document.getElementById('payBtn');
+  payBtn.disabled = true; setStatus(''); payBtn.textContent = 'Taking you to the secure payment page…';
+  post('invoice-pay-session').then(function (res) {
+    if (res.success && res.checkoutUrl) { location.href = res.checkoutUrl; return; }
+    payBtn.disabled = false; payBtn.textContent = 'Pay by card';
+    setStatus(res.message || 'Card payment isn’t available right now — please pay by direct deposit.');
+  }).catch(function () {
+    payBtn.disabled = false; payBtn.textContent = 'Pay by card';
+    setStatus('Could not reach the payment system — please try again, or pay by direct deposit.');
+  });
+}
+document.getElementById('payBtn').addEventListener('click', startCardPayment);
+document.getElementById('printBtn').addEventListener('click', function () { window.print(); });
+
+if (!bookingId || !token) {
+  showNotice('Invoice not found', 'This link isn’t valid. Please use the link from your invoice email, or contact Howqua Hideaway.');
+} else {
+  // back from Stripe: confirm with the backend first (it checks with Stripe directly), then show the invoice
+  var first = returnedPaid ? post('invoice-confirm', { sessionId: sessionId }).catch(function () { return {}; }) : Promise.resolve({});
+  first.then(function (conf) {
+    if (returnedPaid && !conf.paid) showNotice('Thank you', 'Your payment is being processed — you will receive a receipt by email once it is confirmed.');
+    return post('invoice-get');
+  }).then(function (res) {
+    if (!res.success) { showNotice('Invoice not found', res.message || 'This link isn’t valid.'); return; }
+    render(res);
+    if (returnedPaid && !res.paid) {
+      var b = document.getElementById('paidBanner');
+      b.innerHTML = '<b>Thank you.</b>Your payment is being processed — a receipt will be emailed once it is confirmed.';
+      b.style.display = 'block';
+    }
+    if (wantPay && res.cardOffered && !res.paid) startCardPayment();
+  }).catch(function () {
+    showNotice('Could not load your invoice', 'Please try again in a moment, or contact Howqua Hideaway.');
+  });
+}
+</script>
+</body>
+</html>
