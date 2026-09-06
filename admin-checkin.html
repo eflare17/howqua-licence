@@ -198,7 +198,7 @@
 
     <details class="settings">
     <summary><h2>Card-on-file email</h2><span class="hint">rarely needs changing — tap to open</span></summary>
-    <div class="hint">The save-a-card link goes out automatically with the guest's signed licence. This is the email "Resend card link" sends if they haven't done it. Placeholders: [FIRST_NAME], [NAME], [CHECKIN], [CHECKOUT], [AMOUNT] (the charge cap), [LINK]. The [LINK] is added automatically at the end if you leave it out.</div>
+    <div class="hint">The save-a-card link goes out automatically with the guest's signed licence. This is the email "Send card link" sends if they haven't done it. Placeholders: [FIRST_NAME], [NAME], [CHECKIN], [CHECKOUT], [AMOUNT] (the charge cap), [LINK]. The [LINK] is added automatically at the end if you leave it out.</div>
     <label>Subject</label>
     <input id="h_subject">
     <label>Message</label>
@@ -571,7 +571,7 @@ function confirmCheckinSend(b, guestName, email) {
     return confirm('Are you sure you want to proceed?\n\nFor ' + guestName + ':\n\u2022 ' + missing.join('\n\u2022 ') +
       '\n\nThe check-in email includes the lockbox code. Send it anyway?');
   }
-  return confirm('Email the check-in instructions to ' + guestName + (email ? ' (' + email + ')' : '') + '?');
+  return confirm('Send the check-in instructions to ' + guestName + (email ? ' (' + email + ')' : '') + '?');
 }
 function renderPipeline(bookings) {
   lastPipelineBookings = bookings;
@@ -634,15 +634,15 @@ function renderPipeline(bookings) {
     if (signedForId && !idApproved(b) && !b.isPast && b.email) {
       var idBtn = document.createElement('button');
       idBtn.className = 'btn small'; idBtn.type = 'button';
-      idBtn.textContent = b.idLinkSent ? 'Resend ID link' : 'Email ID link';
-      idBtn.title = b.idLinkSent ? 'Last emailed ' + b.idLinkSent : 'Emails the guest a link to verify their ID with Didit';
+      idBtn.textContent = b.idLinkSent ? 'Resend ID link' : 'Send ID link';
+      idBtn.title = b.idLinkSent ? 'Last sent ' + b.idLinkSent : 'Sends the guest a link to verify their ID with Didit';
       idBtn.addEventListener('click', function () {
-        if (!confirm('Email ' + b.guestName + ' (' + b.email + ') a link to verify their ID?')) return;
+        if (!confirm('Send ' + b.guestName + ' (' + b.email + ') a link to verify their ID?')) return;
         idBtn.disabled = true; pipelineStatus(b.bookingId, 'Sending\u2026', true);
         var fd = new FormData();
         fd.append('type', 'send-id-link'); fd.append('password', password); fd.append('bookingId', b.bookingId);
         fetch(SCRIPT_URL, { method: 'POST', body: fd }).then(function (r) { return r.json(); }).then(function (res) {
-          pipelineStatus(b.bookingId, res.message || (res.success ? '\u2713 ID link emailed.' : 'Failed.'), res.success);
+          pipelineStatus(b.bookingId, res.message || (res.success ? '\u2713 ID link sent.' : 'Failed.'), res.success);
           idBtn.disabled = false;
           if (res.success) loadPipeline();
         }).catch(function (e) { pipelineStatus(b.bookingId, 'Could not send: ' + e.message, false); idBtn.disabled = false; });
@@ -655,15 +655,15 @@ function renderPipeline(bookings) {
       // the link went out with their signed licence — this is for chasing
       var cardBtn = document.createElement('button');
       cardBtn.className = 'btn small'; cardBtn.type = 'button';
-      cardBtn.textContent = 'Email card link'; // it always goes out with the licence first, so 'send' vs 'resend' just confuses
+      cardBtn.textContent = b.cardLinkSent ? 'Resend card link' : 'Send card link'; // it always goes out with the licence first, so 'send' vs 'resend' just confuses
       cardBtn.addEventListener('click', function () {
-        if (!confirm('Email the save-a-card link to ' + b.guestName + ' (' + b.email + ')?')) return;
+        if (!confirm('Send the save-a-card link to ' + b.guestName + ' (' + b.email + ')?')) return;
         cardBtn.disabled = true; pipelineStatus(b.bookingId, 'Sending…', true);
         var fd = new FormData();
         fd.append('type', 'send-card-link'); fd.append('password', password);
         fd.append('bookingId', b.bookingId);
         fetch(SCRIPT_URL, { method: 'POST', body: fd }).then(function (r) { return r.json(); }).then(function (res) {
-          pipelineStatus(b.bookingId, res.message || (res.success ? '✓ Card link emailed.' : 'Failed.'), res.success);
+          pipelineStatus(b.bookingId, res.message || (res.success ? '✓ Card link sent.' : 'Failed.'), res.success);
           cardBtn.disabled = false;
           if (res.success) loadPipeline();
         }).catch(function (e) { pipelineStatus(b.bookingId, 'Could not send: ' + e.message, false); cardBtn.disabled = false; });
@@ -769,15 +769,26 @@ function renderPipeline(bookings) {
       invBtn.textContent = invoiceSent(b) ? 'Resend invoice' : 'Send invoice';
       invBtn.title = invoiceSent(b) ? 'Emails the same invoice (' + b.invoiceNo + ') again' : 'Emails the guest an invoice for ' + b.stayPrice + ' with the bank details';
       invBtn.addEventListener('click', function () {
-        var q = invoiceSent(b)
-          ? 'Email invoice ' + b.invoiceNo + ' to ' + b.guestName + ' (' + b.email + ') again?'
-          : 'Email ' + b.guestName + ' (' + b.email + ') an invoice for ' + b.stayPrice + '?\n\nThe amount comes from the Stay Price on the licence — change it there first if it\u2019s wrong.';
+        var q;
+        if (invoiceSent(b)) {
+          q = 'Send invoice ' + b.invoiceNo + ' to ' + b.guestName + ' (' + b.email + ') again?';
+        } else {
+          // usual order is ID → card → invoice; say so if the guest hasn't done those yet, but let Kim go ahead
+          var notDone = [];
+          if (idDeclined(b)) notDone.push('ID verification was DECLINED');
+          else if (!idApproved(b)) notDone.push('ID has NOT been verified');
+          var legacyHeldInv = isLegacyHold(b) && (b.holdStatus || '').toLowerCase() === 'held';
+          if (!cardOnFile(b) && !legacyHeldInv) notDone.push('NO card details have been saved');
+          q = notDone.length
+            ? 'Are you sure you want to send the invoice?\n\nFor ' + b.guestName + ':\n\u2022 ' + notDone.join('\n\u2022 ') + '\n\nInvoice for ' + b.stayPrice + ' will be sent to ' + b.email + '. Send it anyway?'
+            : 'Send ' + b.guestName + ' (' + b.email + ') an invoice for ' + b.stayPrice + '?\n\nThe amount comes from the Stay Price on the licence \u2014 change it there first if it\u2019s wrong.';
+        }
         if (!confirm(q)) return;
         invBtn.disabled = true; pipelineStatus(b.bookingId, 'Sending invoice\u2026', true);
         var fd = new FormData();
         fd.append('type', 'send-invoice'); fd.append('password', password); fd.append('bookingId', b.bookingId);
         fetch(SCRIPT_URL, { method: 'POST', body: fd }).then(function (r) { return r.json(); }).then(function (res) {
-          pipelineStatus(b.bookingId, res.message || (res.success ? '\u2713 Invoice emailed.' : 'Failed.'), res.success);
+          pipelineStatus(b.bookingId, res.message || (res.success ? '\u2713 Invoice sent.' : 'Failed.'), res.success);
           invBtn.disabled = false;
           if (res.success) loadPipeline();
         }).catch(function (e) { pipelineStatus(b.bookingId, 'Could not send: ' + e.message, false); invBtn.disabled = false; });
