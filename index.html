@@ -212,8 +212,13 @@
     </div>
     <div class="field-row">
       <div class="field">
+        <label>Package</label>
+        <input type="text" id="bookingType" placeholder="e.g. Mini-Moon Package">
+      </div>
+      <div class="field">
         <label>Total stay price (AUD)</label>
         <input type="text" id="stayPrice" inputmode="decimal" placeholder="e.g. $1,250.00">
+        <div class="field-hint" style="font-size:11px; color:#777; margin-top:3px;">Pre-filled from Kim’s rates — change it if needed</div>
       </div>
       <div class="field">
         <label>Incidentals charge cap (AUD)</label>
@@ -273,7 +278,7 @@
     <summary>5. Term</summary>
     <div class="clause-body">
       <p>The Licence commences at check-in on <b id="out-checkin">[check-in]</b> and ends at check-out on <b id="out-checkout">[check-out]</b> ("the Term"). The Licensee must vacate the Property in full by the check-out time stated, unless otherwise agreed in writing with the Licensor.</p>
-      <p>The total licence fee for the Term is <b id="out-price">[total stay price]</b>, payable as arranged directly with the Licensor. The card on file under Clause 2 is not used for the licence fee.</p>
+      <p>The booking is for the <b id="out-package">Standard Stay</b>. The total licence fee for the Term is <b id="out-price">[total stay price]</b>, payable as arranged directly with the Licensor. The card on file under Clause 2 is not used for the licence fee.</p>
     </div>
   </details>
 
@@ -393,7 +398,7 @@ const DEFAULT_RULES = `- No smoking or vaping inside. Smoking allowed only aroun
 - Maximum of 4 occupants on the property at any time.
 - Outdoor fires only in designated fire pit.
 - No shoes to be worn inside. Inside slippers always welcome!`;
-const fieldIds = ['licensor','licenseeName','licenseePhone','licenseeEmail','occupants','checkin','checkout','bond','stayPrice'];
+const fieldIds = ['licensor','licenseeName','licenseePhone','licenseeEmail','occupants','checkin','checkout','bond','stayPrice','bookingType'];
 
 const bind = (id, outId, fallback) => {
   const el = document.getElementById(id);
@@ -408,6 +413,7 @@ bind('checkin', 'out-checkin', '[check-in]');
 bind('checkout', 'out-checkout', '[check-out]');
 bind('bond', 'out-bond', '[incidentals cap]');
 bind('stayPrice', 'out-price', '[total stay price]');
+bind('bookingType', 'out-package', 'Standard Stay');
 // tidy whatever Kim types into "$1,250.00" so the licence and emails all show it the same way
 document.getElementById('stayPrice').addEventListener('blur', function () {
   const n = parseFloat(this.value.replace(/[^0-9.]/g, ''));
@@ -588,7 +594,7 @@ if (hash.startsWith('#prefill=')) {
     const json = b64DecodeUnicode(decodeURIComponent(encoded));
     const data = JSON.parse(json);
     if (data.bookingId) currentBookingId = data.bookingId;
-    ['licenseeName','licenseeFirstName','licenseeLastName','licenseePhone','licenseeEmail','occupants','checkin','checkout'].forEach(id => {
+    ['licenseeName','licenseeFirstName','licenseeLastName','licenseePhone','licenseeEmail','occupants','checkin','checkout','bookingType','stayPrice'].forEach(id => {
       if (data[id] !== undefined) document.getElementById(id).value = data[id];
     });
     // Older links only carry a single full name — split it across the two fields
