@@ -222,7 +222,7 @@
     <label>Note at the bottom of the invoice (optional)</label>
     <textarea id="inv_footerNote" style="min-height:60px;"></textarea>
     <label style="display:flex; align-items:center; gap:8px; margin-top:16px; cursor:pointer;"><input type="checkbox" id="inv_cardPayments" style="width:auto; margin:0;"> Accept card payments on invoices (Stripe)</label>
-    <div class="hint">Off = bank transfer only. On = invoices sent from then on also get an "Or pay by card" button; card payments are marked paid automatically. Stripe's fee comes out of the payment (about 1.7% + 30c) — surcharging isn't allowed from 1 Oct 2026. Invoices already sent aren't changed.</div>
+    <div class="hint">Off = bank transfer only. On = invoices sent from then on also get an "Or pay by card" button; card payments are marked paid automatically. Stripe's fee comes out of the payment (about 1.7% + 30c) — surcharging isn't allowed from 1 Oct 2026. Resending an unpaid invoice picks up the current setting.</div>
     <label style="display:flex; align-items:center; gap:8px; margin-top:12px; cursor:pointer;"><input type="checkbox" id="inv_attachPdf" style="width:auto; margin:0;"> Attach a PDF copy to invoice emails</label>
     <button class="btn" id="saveInvoiceBtn" type="button">Save invoice settings</button>
     </details>
