@@ -751,6 +751,7 @@ document.getElementById('genLinkBtn').addEventListener('click', async () => {
     af.append('checkin', document.getElementById('checkin').value);
     af.append('checkout', document.getElementById('checkout').value);
     af.append('stayPrice', document.getElementById('stayPrice').value.trim());
+    af.append('bond', document.getElementById('bond').value.trim());
     af.append('rulesHash', rulesHash(rulesBox.value));
     const ar = await fetch(APPS_SCRIPT_URL, { method: 'POST', body: af });
     const aj = await ar.json();

@@ -654,18 +654,30 @@ function renderPipeline(bookings) {
         var existing = card.querySelector('.charge-form');
         if (existing) { existing.remove(); return; }
         var already = parseFloat(String(b.chargeAmount || '0').replace(/[^0-9.]/g, '')) || 0;
-        var left = Math.max(0, SECURITY_CAP_AUD - already);
+        var bookingCap = parseFloat(String(b.bond || '').replace(/[^0-9.]/g, '')) || SECURITY_CAP_AUD; // the cap THIS guest agreed to
+        var left = Math.max(0, bookingCap - already);
+        // an unfinished charge from before (page refreshed / form closed mid-way) — resume it with the SAME
+        // reference rather than starting a new one, so it can't become a second payment
+        var unfinished = (b.openCharges || [])[0] || null;
         var f = document.createElement('div');
         f.className = 'charge-form';
         // one reference per intended charge — reused if Kim retries, so the server can never charge it twice
         f.dataset.operationId = (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : ('op-' + Date.now() + '-' + Math.random().toString(36).slice(2, 10));
         f.innerHTML =
-          '<div class="charge-title">Charge ' + esc(b.guestName) + '\u2019s card <span class="hint" style="display:inline;margin:0;">(up to $' + left.toFixed(2) + ' remaining of the $' + SECURITY_CAP_AUD + ' cap)</span></div>' +
+          '<div class="charge-title">Charge ' + esc(b.guestName) + '\u2019s card <span class="hint" style="display:inline;margin:0;">(up to $' + left.toFixed(2) + ' remaining of the $' + bookingCap.toFixed(2) + ' cap)</span></div>' +
+          (unfinished ? '<div class="hint" style="color:#842029;">Resuming an unfinished charge of $' + (unfinished.amountCents / 100).toFixed(2) + ' (' + esc(unfinished.reason) + ') \u2014 status: ' + esc(unfinished.status) + '. Amount and reason are fixed for this retry.</div>' : '') +
           '<div class="charge-row"><label>Amount ($)</label><input type="text" inputmode="decimal" class="charge-amount" placeholder="e.g. 45.00"></div>' +
           '<div class="charge-row"><label>Reason \u2014 the guest reads this</label><input type="text" class="charge-reason" placeholder="e.g. Broken bedside lamp, replacement cost"></div>' +
           '<div class="charge-actions"><button type="button" class="btn small charge-go" style="background:#842029;">Email notice &amp; charge</button>' +
           '<button type="button" class="btn small charge-cancel" style="background:#888;">Cancel</button></div>';
         card.querySelector('.pipeline-actions').after(f);
+        if (unfinished) {
+          f.dataset.operationId = unfinished.operationId;
+          f.querySelector('.charge-amount').value = (unfinished.amountCents / 100).toFixed(2);
+          f.querySelector('.charge-reason').value = unfinished.reason;
+          f.querySelector('.charge-amount').readOnly = true; f.querySelector('.charge-reason').readOnly = true;
+          f.querySelector('.charge-go').textContent = 'Retry this charge';
+        }
         f.querySelector('.charge-cancel').addEventListener('click', function () { f.remove(); });
         f.querySelector('.charge-go').addEventListener('click', function () {
           var amt = parseFloat(f.querySelector('.charge-amount').value.replace(/[^0-9.]/g, ''));

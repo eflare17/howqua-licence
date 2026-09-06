@@ -94,7 +94,9 @@ if (hash.startsWith('#data=')) {
   row('Guest', bookingData.licenseeName || '(not provided)');
   row('Check-in', bookingData.checkin || '(not provided)');
   row('Check-out', bookingData.checkout || '(not provided)');
-  row('Charge cap', "$500 (only if there's damage)");
+  var capText = (bookingData.bond && /\d/.test(bookingData.bond)) ? bookingData.bond.replace(/\.00$/, '') : '$500';
+  row('Charge cap', capText + " (only if there's damage)");
+  document.getElementById('depositAmountInline').textContent = capText;
 })();
 
 // Back from Stripe: don't say "saved" until the server has checked with Stripe and recorded the card.
