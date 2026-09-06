@@ -503,7 +503,29 @@ function toIso(text) {
   if (!mon) return '';
   return m[3] + '-' + ('0' + mon).slice(-2) + '-' + ('0' + m[1]).slice(-2);
 }
+// "Are you sure?" before check-in instructions go out while earlier steps are still missing
+var lastPipelineBookings = [];
+function checkinMissingSteps(b) {
+  if (!b) return [];
+  var missing = [];
+  var signedOk = b.status === 'Signed' || b.status === 'Deposit Held' || b.status === 'Card on file';
+  if (!signedOk) missing.push('the licence has NOT been signed');
+  if (idDeclined(b)) missing.push('ID verification was DECLINED');
+  else if (!idApproved(b)) missing.push('ID has NOT been verified');
+  var legacyHeld = isLegacyHold(b) && (b.holdStatus || '').toLowerCase() === 'held';
+  if (!cardOnFile(b) && !legacyHeld) missing.push('NO card details have been saved');
+  return missing;
+}
+function confirmCheckinSend(b, guestName, email) {
+  var missing = checkinMissingSteps(b);
+  if (missing.length) {
+    return confirm('Are you sure you want to proceed?\n\nFor ' + guestName + ':\n\u2022 ' + missing.join('\n\u2022 ') +
+      '\n\nThe check-in email includes the lockbox code. Send it anyway?');
+  }
+  return confirm('Email the check-in instructions to ' + guestName + (email ? ' (' + email + ')' : '') + '?');
+}
 function renderPipeline(bookings) {
+  lastPipelineBookings = bookings;
   var list = document.getElementById('pipelineList');
   var visible = bookings.filter(function (b) { return b.status !== 'Archived'; });
   // server gives an ISO check-in date, so sorting is reliable regardless of how the date was typed
@@ -557,6 +579,26 @@ function renderPipeline(bookings) {
       diditLink.href = 'https://business.didit.me/';
       diditLink.title = b.diditSessionId ? 'Didit session ' + b.diditSessionId : 'Open the Didit console';
       actions.appendChild(diditLink);
+    }
+    // guest signed but never finished ID verification — email them a fresh Didit link
+    var signedForId = b.status === 'Signed' || b.status === 'Deposit Held' || b.status === 'Card on file';
+    if (signedForId && !idApproved(b) && !b.isPast && b.email) {
+      var idBtn = document.createElement('button');
+      idBtn.className = 'btn small'; idBtn.type = 'button';
+      idBtn.textContent = b.idLinkSent ? 'Resend ID link' : 'Email ID link';
+      idBtn.title = b.idLinkSent ? 'Last emailed ' + b.idLinkSent : 'Emails the guest a link to verify their ID with Didit';
+      idBtn.addEventListener('click', function () {
+        if (!confirm('Email ' + b.guestName + ' (' + b.email + ') a link to verify their ID?')) return;
+        idBtn.disabled = true; pipelineStatus(b.bookingId, 'Sending\u2026', true);
+        var fd = new FormData();
+        fd.append('type', 'send-id-link'); fd.append('password', password); fd.append('bookingId', b.bookingId);
+        fetch(SCRIPT_URL, { method: 'POST', body: fd }).then(function (r) { return r.json(); }).then(function (res) {
+          pipelineStatus(b.bookingId, res.message || (res.success ? '\u2713 ID link emailed.' : 'Failed.'), res.success);
+          idBtn.disabled = false;
+          if (res.success) loadPipeline();
+        }).catch(function (e) { pipelineStatus(b.bookingId, 'Could not send: ' + e.message, false); idBtn.disabled = false; });
+      });
+      actions.appendChild(idBtn);
     }
     var signedish = b.status === 'Signed' || b.status === 'Deposit Held' || b.status === 'Card on file';
     var needsCard = signedish && !cardOnFile(b) && !b.isPast && !(isLegacyHold(b) && (b.holdStatus || '').toLowerCase() === 'held');
@@ -668,7 +710,7 @@ function renderPipeline(bookings) {
       ciBtn.className = 'btn small'; ciBtn.type = 'button';
       ciBtn.textContent = b.checkinSent ? 'Resend check-in email' : 'Send check-in email';
       ciBtn.addEventListener('click', function () {
-        if (!confirm('Email the check-in instructions to ' + b.guestName + (b.email ? ' (' + b.email + ')' : '') + '?')) return;
+        if (!confirmCheckinSend(b, b.guestName, b.email)) return;
         ciBtn.disabled = true;
         api({ sub: 'send', eventId: b.calendarEventId }).then(function (res) {
           pipelineStatus(b.bookingId, res.message, res.success);
@@ -729,7 +771,9 @@ function renderBookings(bookings) {
     btn.className = 'btn small'; btn.type = 'button';
     btn.textContent = b.sent ? 'Send again' : 'Send now';
     btn.addEventListener('click', function () {
-      if (!confirm('Email the check-in instructions to ' + b.guestName + (b.guestEmail ? ' (' + b.guestEmail + ')' : '') + '?')) return;
+      // this table only knows the calendar event, so look the booking up in the pipeline for the pre-send checks
+      var pb = lastPipelineBookings.filter(function (x) { return x.calendarEventId === b.id; })[0];
+      if (!confirmCheckinSend(pb, b.guestName, b.guestEmail)) return;
       btn.disabled = true;
       api({ sub: 'send', eventId: b.id }).then(function (res) {
         setStatus(res.message, res.success);
