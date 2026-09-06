@@ -357,6 +357,22 @@ let rangeStart = null;
 let rangeEnd = null;
 let hoverDate = null;
 const minNightsByType = { minimoon: 3, standard: 2 };
+// Kim's rates — must match RATES in Code.gs. Shown to the guest as an estimate; Kim confirms the
+// final price on the licence.
+const RATES = {
+  standard: { perNight: 420 },
+  minimoon: { packagePrice: 1440, packageNights: 3, extraNight: 300 }
+};
+function estimatePrice(type, nights) {
+  if (nights < 1) return null;
+  if (type === 'minimoon') {
+    const r = RATES.minimoon;
+    const extra = Math.max(0, nights - r.packageNights);
+    return { total: r.packagePrice + extra * r.extraNight,
+      breakdown: r.packageNights + '-night package $' + r.packagePrice.toLocaleString('en-AU') + (extra ? ' + ' + extra + ' extra night' + (extra > 1 ? 's' : '') + ' × $' + r.extraNight : '') };
+  }
+  return { total: nights * RATES.standard.perNight, breakdown: nights + ' night' + (nights > 1 ? 's' : '') + ' × $' + RATES.standard.perNight };
+}
 // Check-in / check-out times per package. These get stamped onto the dates the guest picks,
 // so they flow through to the licence, the emails and the calendar automatically.
 const checkTimesByType = {
@@ -572,8 +588,13 @@ function handleDayClick(d) {
 
 function updateSummary() {
   if (rangeStart && rangeEnd) {
-    const t = checkTimes(document.getElementById('bookingType').value);
-    rangeSummaryEl.textContent = 'Check-in: ' + formatNice(rangeStart) + ' from ' + t.checkin + '   →   Check-out: ' + formatNice(rangeEnd) + ' by ' + t.checkout;
+    const type = document.getElementById('bookingType').value;
+    const t = checkTimes(type);
+    const nights = Math.round((rangeEnd - rangeStart) / 86400000);
+    const est = estimatePrice(type, nights);
+    rangeSummaryEl.innerHTML = 'Check-in: ' + formatNice(rangeStart) + ' from ' + t.checkin + '   \u2192   Check-out: ' + formatNice(rangeEnd) + ' by ' + t.checkout +
+      (est ? '<div style="margin-top:6px; font-size:15px; font-weight:bold;">Estimated total: $' + est.total.toLocaleString('en-AU') +
+             '</div><div style="font-size:12px; color:#666;">' + est.breakdown + ' \u2014 Kim will confirm the final price with your licence</div>' : '');
   } else if (rangeStart) {
     rangeSummaryEl.textContent = 'Check-in: ' + formatNice(rangeStart) + '   —   now click your check-out date';
   } else {
