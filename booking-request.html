@@ -307,18 +307,44 @@ function showLoading(text) {
   loadingOverlay.classList.remove('hide');
 }
 function hideLoading() { loadingOverlay.classList.add('hide'); }
-const loadingFallback = setTimeout(hideLoading, 12000); // never trap the guest behind the bunny if the server is slow
 
-fetch(APPS_SCRIPT_URL + '?action=get-busy-dates')
-  .then(r => r.json())
-  .then(result => {
-    if (result.success) {
+// Availability must actually load before a request can be sent — otherwise a guest could request dates
+// that were never checked. On failure the calendar is greyed out with a retry link.
+let availabilityLoaded = false;
+function setAvailabilityState(ok, msg) {
+  availabilityLoaded = ok;
+  const cal = document.getElementById('rangeCalendar');
+  const submitBtn = document.getElementById('submitBtn');
+  let note = document.getElementById('availNote');
+  if (!note) {
+    note = document.createElement('div');
+    note.id = 'availNote';
+    note.style.cssText = 'font-family: Arial, sans-serif; font-size: 13px; color: #a33; text-align: center; margin-top: 8px;';
+    cal.insertAdjacentElement('afterend', note);
+  }
+  cal.style.opacity = ok ? '' : '0.45';
+  cal.style.pointerEvents = ok ? '' : 'none';
+  submitBtn.disabled = !ok;
+  note.innerHTML = ok ? '' : (msg + ' <a href="#" id="availRetry" style="color:#2b5540; font-weight:bold;">Tap to retry</a>');
+  if (!ok) document.getElementById('availRetry').addEventListener('click', (ev) => { ev.preventDefault(); loadBusyDates(); });
+}
+function loadBusyDates() {
+  showLoading('Loading availability…');
+  const fallback = setTimeout(hideLoading, 12000); // never trap the guest behind the bunny if the server is slow
+  fetch(APPS_SCRIPT_URL + '?action=get-busy-dates')
+    .then(r => r.json())
+    .then(result => {
+      if (!result.success) throw new Error(result.message || 'availability unavailable');
       busyDates = new Set(result.busyDates);
+      setAvailabilityState(true, '');
       renderCalendar(); // re-render now that we know which dates are taken
-    }
-  })
-  .catch(() => {}) // if this fails, the calendar just shows all dates as available — not ideal, but not broken
-  .finally(() => { clearTimeout(loadingFallback); hideLoading(); });
+    })
+    .catch(() => {
+      setAvailabilityState(false, 'We couldn’t load availability just now, so dates can’t be selected yet.');
+    })
+    .finally(() => { clearTimeout(fallback); hideLoading(); });
+}
+loadBusyDates();
 
 function b64EncodeUnicode(str) {
   return btoa(encodeURIComponent(str).replace(/%([0-9A-F]{2})/g, (m, p1) => String.fromCharCode('0x' + p1)));
@@ -590,6 +616,11 @@ renderCalendar();
 document.getElementById('submitBtn').addEventListener('click', async () => {
   const statusEl = document.getElementById('status');
   const submitBtn = document.getElementById('submitBtn');
+  if (!availabilityLoaded) {
+    statusEl.style.color = '#a33';
+    statusEl.textContent = 'Availability hasn’t loaded yet — please tap "retry" under the calendar first.';
+    return;
+  }
 
   const firstName = document.getElementById('licenseeFirstName').value.trim();
   const lastName = document.getElementById('licenseeLastName').value.trim();
@@ -639,29 +670,17 @@ document.getElementById('submitBtn').addEventListener('click', async () => {
   statusEl.textContent = 'Sending your request...';
   showLoading('Sending your request…');
 
-  // generate a booking ID now so it follows this booking all the way through —
-  // the licence tool, Stripe, the calendar and the admin page all use the same ID
-  const bookingId = 'HH-' + new Date().getFullYear() + '-' +
-    Array.from({ length: 8 }, () => '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ'[Math.floor(Math.random() * 36)]).join('');
-
-  // build a pre-fill link for Kim/Tyson to open the Licence to Occupy tool with these details already in
-  const prefillData = {
-    bookingId: bookingId,
-    licenseeName: name,
-    licenseeFirstName: firstName,
-    licenseeLastName: lastName,
-    licenseePhone: phone,
-    licenseeEmail: email,
-    occupants: occupants,
-    checkin: checkin,
-    checkout: checkout
-  };
-  const encoded = encodeURIComponent(b64EncodeUnicode(JSON.stringify(prefillData)));
-  const prefillLink = LICENCE_TOOL_URL + '#prefill=' + encoded;
+  // The server makes the booking ID and Kim's pre-fill link. We only send a one-off submission token —
+  // kept for this page load — so if the response is lost and the guest presses Send again, the server
+  // recognises the retry instead of creating a second booking.
+  if (!window.__submissionToken) {
+    window.__submissionToken = (window.crypto && crypto.randomUUID) ? crypto.randomUUID()
+      : ('sub-' + Date.now() + '-' + Math.random().toString(36).slice(2, 12));
+  }
 
   const formData = new FormData();
   formData.append('type', 'booking');
-  formData.append('bookingId', bookingId);
+  formData.append('submissionToken', window.__submissionToken);
   formData.append('licenseeName', name);
   formData.append('licenseeFirstName', firstName);
   formData.append('licenseeLastName', lastName);
@@ -672,7 +691,6 @@ document.getElementById('submitBtn').addEventListener('click', async () => {
   formData.append('occupants', occupants);
   formData.append('message', message);
   formData.append('bookingType', bookingTypeLabel);
-  formData.append('prefillLink', prefillLink);
 
   try {
     const resp = await fetch(APPS_SCRIPT_URL, { method: 'POST', body: formData });

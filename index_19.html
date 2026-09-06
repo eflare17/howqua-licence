@@ -217,7 +217,7 @@
       </div>
       <div class="field">
         <label>Incidentals charge cap (AUD)</label>
-        <input type="text" id="bond" value="$300.00">
+        <input type="text" id="bond" value="$500.00">
       </div>
     </div>
   <details class="field" id="rulesFieldWrap">
@@ -246,7 +246,12 @@
   <details class="clause" id="clause2">
     <summary>2. Card on File for Incidentals</summary>
     <div class="clause-body">
-      <p>No security deposit is taken. Prior to occupancy the Licensee saves a payment card via Stripe, which the Licensor may retain on file and charge up to <b id="out-bond">[incidentals cap]</b> in total for damage, excess cleaning, missing items, or breach of this Licence. Nothing is charged unless such a claim arises, and the Licensee will be sent an itemised notice of the amount and reason before any charge is made. Card details are held by Stripe, not the Licensor, and are deleted automatically 14 days after check-out.</p>
+      <p>No security deposit is taken. Prior to occupancy the Licensee saves a payment card via Stripe. By signing this Licence the Licensee expressly authorises the Licensor to charge that card, without further authorisation, for damage to the Property or its contents, missing items, cleaning beyond a reasonable standard, and breaches of this Licence, up to a total of <b id="out-bond">[incidentals cap]</b> for the stay. The following are agreed charges for specific breaches:</p>
+      <ul>
+        <li>Pets or animals found on the Property during the stay: <b>$220</b> additional cleaning and remediation fee;</li>
+        <li>A party, function or event held at the Property: <b>$300</b> additional cleaning, inspection and remediation fee.</li>
+      </ul>
+      <p>Nothing is charged unless such a claim arises. The Licensee will be sent an itemised notice of the amount and reason before any charge is made. Card details are held by Stripe, not the Licensor, and are deleted automatically 14 days after check-out.</p>
     </div>
   </details>
 
@@ -275,7 +280,7 @@
   <details class="clause">
     <summary>6. Occupancy Limit</summary>
     <div class="clause-body">
-      <p>The Property is licensed for occupation by no more than 4 persons at any time. The Licensee must not permit additional persons to stay overnight without the Licensor's prior written consent.</p>
+      <p>The Property is licensed for occupation by no more than 4 persons at any time, including overnight. No additional persons may stay at the Property under any circumstances.</p>
     </div>
   </details>
 
@@ -285,6 +290,7 @@
       <p>The Licensee agrees to:</p>
       <ul>
         <li>Abide by the house rules set out in this Licence;</li>
+        <li>Accept the agreed charges and card authorisation set out in Clause 2 in the event of a breach;</li>
         <li>Take care of the Property, its fixtures, fittings and contents;</li>
         <li>Smoke only outdoors at the designated fire pit area, fully extinguish all smoking materials, and not discard them on the ground or in vegetation;</li>
         <li>Not light or maintain any outdoor fire on days of Total Fire Ban, or otherwise contrary to CFA restrictions in force;</li>
@@ -357,6 +363,7 @@
   <!-- Admin mode -->
   <div class="submit-bar" id="adminActions">
     <div class="adminbar">
+      <input type="password" id="adminPassword" placeholder="Admin password" autocomplete="current-password" style="padding:8px 10px; border:1px solid #ccc; border-radius:6px; font-size:13px; font-family:Arial, sans-serif; min-width:160px;">
       <button id="downloadSigBtn">Save Licensor Signature (one-time)</button>
       <button id="genLinkBtn">Generate link to send to guest</button>
     </div>
@@ -466,8 +473,9 @@ function makeSigPad(canvas, maxDim) {
     return { x: e.clientX - rect.left, y: e.clientY - rect.top };
   }
   let lastPoint = null;
+  let inkLength = 0; // total distance drawn — a tap without movement is not a signature
   function start(e) {
-    drawing = true; hasSig = true;
+    drawing = true;
     const p = getPos(e);
     lastPoint = p;
     ctx.beginPath();
@@ -485,6 +493,8 @@ function makeSigPad(canvas, maxDim) {
       ctx.lineWidth = 2.4;
     }
     const p = getPos(e);
+    inkLength += Math.hypot(p.x - lastPoint.x, p.y - lastPoint.y);
+    if (inkLength > 12) hasSig = true;
     const midX = (lastPoint.x + p.x) / 2;
     const midY = (lastPoint.y + p.y) / 2;
     ctx.quadraticCurveTo(lastPoint.x, lastPoint.y, midX, midY);
@@ -503,7 +513,7 @@ function makeSigPad(canvas, maxDim) {
   canvas.style.touchAction = 'none';
 
   return {
-    clear: () => { ctx.clearRect(0, 0, canvas.width, canvas.height); hasSig = false; },
+    clear: () => { ctx.clearRect(0, 0, canvas.width, canvas.height); hasSig = false; inkLength = 0; },
     hasSignature: () => hasSig,
     dataUrl: () => canvas.toDataURL('image/png'),
     resize: resize
@@ -561,6 +571,7 @@ document.getElementById('downloadSigBtn').addEventListener('click', () => {
 const hash = window.location.hash;
 let isGuestMode = false;
 let currentBookingId = ''; // follows the booking from request through to signing
+let currentApprovalCode = ''; // proves Kim generated this link (checked by the server on signing)
 
 if (hash.startsWith('#prefill=')) {
   // Pre-fill from a booking request — fields stay editable, this is for Kim/Tyson to review before signing
@@ -594,8 +605,18 @@ if (hash.startsWith('#data=')) {
     const json = b64DecodeUnicode(decodeURIComponent(encoded));
     const data = JSON.parse(json);
     if (data.bookingId) currentBookingId = data.bookingId;
+    if (data.approvalCode) currentApprovalCode = data.approvalCode;
     fieldIds.forEach(id => { if (data[id] !== undefined) document.getElementById(id).value = data[id]; });
     if (data.rules !== undefined) rulesBox.value = data.rules;
+    // the visible first/last name boxes must show — and lock to — the approved name, otherwise a guest
+    // typing in them would silently rewrite the name on the licence and break the ID check
+    {
+      const parts = String(data.licenseeName || '').trim().split(/\s+/);
+      document.getElementById('licenseeFirstName').value = parts.shift() || '';
+      document.getElementById('licenseeLastName').value = parts.join(' ');
+      document.getElementById('licenseeFirstName').disabled = true;
+      document.getElementById('licenseeLastName').disabled = true;
+    }
     fieldIds.forEach(id => document.getElementById(id).disabled = true);
     rulesBox.disabled = true;
     document.getElementById('rulesFieldWrap').style.display = 'none';
@@ -692,12 +713,47 @@ document.getElementById('shortenLinkBtn').addEventListener('click', async () => 
   }
 });
 
-document.getElementById('genLinkBtn').addEventListener('click', () => {
+document.getElementById('genLinkBtn').addEventListener('click', async () => {
   const adminStatus = document.getElementById('adminStatus');
+  const genBtn = document.getElementById('genLinkBtn');
+  const adminPassword = document.getElementById('adminPassword').value;
+  if (!currentBookingId) {
+    adminStatus.style.color = '#a33';
+    adminStatus.textContent = 'This page wasn’t opened from a booking request, so there is no booking to approve. Open the link from the "New booking request" email (or the dashboard) and try again.';
+    return;
+  }
+  if (!adminPassword) {
+    adminStatus.style.color = '#a33';
+    adminStatus.textContent = 'Enter the admin password (same as the dashboard) to approve this booking and generate the guest link.';
+    document.getElementById('adminPassword').focus();
+    return;
+  }
   if (!document.getElementById('stayPrice').value.trim()) {
     if (!confirm('No total stay price entered — the licence will say "[total stay price]". Generate the link anyway?')) return;
   }
-  const data = {};
+  // Approve on the server first — the guest's link only works with the code this returns
+  genBtn.disabled = true;
+  adminStatus.style.color = '#2b5540';
+  adminStatus.textContent = 'Approving booking…';
+  let approvalCode = '';
+  try {
+    const af = new FormData();
+    af.append('type', 'approve-booking'); af.append('password', adminPassword);
+    af.append('bookingId', currentBookingId);
+    af.append('checkin', document.getElementById('checkin').value);
+    af.append('checkout', document.getElementById('checkout').value);
+    const ar = await fetch(APPS_SCRIPT_URL, { method: 'POST', body: af });
+    const aj = await ar.json();
+    if (!aj.success || !aj.approvalCode) throw new Error(aj.message || 'unknown error');
+    approvalCode = aj.approvalCode;
+  } catch (err) {
+    genBtn.disabled = false;
+    adminStatus.style.color = '#a33';
+    adminStatus.textContent = 'Could not approve the booking: ' + err.message;
+    return;
+  }
+  genBtn.disabled = false;
+  const data = { approvalCode: approvalCode };
   fieldIds.forEach(id => { data[id] = document.getElementById(id).value; });
   if (rulesBox.value.trim() !== DEFAULT_RULES.trim()) {
     data.rules = rulesBox.value;
@@ -962,96 +1018,157 @@ document.getElementById('submitBtn').addEventListener('click', async () => {
     const pdfSizeMB = pdfBlob.size / (1024 * 1024);
 
     if (pdfSizeMB > 4.5) {
-      setStatus('Your copy has downloaded, but the signed PDF is too large (' + pdfSizeMB.toFixed(1) + 'MB) to email automatically. Please send the downloaded file to the owner directly.', '#a33');
-      pdf.save(filename); // only case where we still force a download — there's no other way to get them the file
-      submitBtn.disabled = false;
+      setStatus('The signed PDF is too large (' + pdfSizeMB.toFixed(1) + 'MB) to send automatically. Please download it and email it to Howqua Hideaway.', '#a33');
+      window.__signedPdf = { blob: pdfBlob, base64: '', filename: filename, licenseeName: licenseeName };
+      showRecoveryBar(false);
       return;
     }
 
-    const guestEmail = document.getElementById('licenseeEmail').value.trim();
-    const guestPhone = document.getElementById('licenseePhone').value.trim();
-
-    setStatus('Sending signed copy...');
-
-    // convert PDF blob to base64 for the Apps Script backend
+    // keep the finished PDF so a failed send can be retried or downloaded without signing again
     const pdfBase64 = await new Promise((resolve, reject) => {
       const reader = new FileReader();
       reader.onload = () => resolve(reader.result.split(',')[1]);
       reader.onerror = reject;
       reader.readAsDataURL(pdfBlob);
     });
-
-    const sendForm = new FormData();
-    sendForm.append('type', 'licence');
-    sendForm.append('licenseeName', licenseeName);
-    sendForm.append('licenseePhone', guestPhone);
-    sendForm.append('licenseeEmail', guestEmail);
-    sendForm.append('checkin', document.getElementById('checkin').value);
-    sendForm.append('checkout', document.getElementById('checkout').value);
-    sendForm.append('bond', document.getElementById('bond').value);
-    sendForm.append('stayPrice', document.getElementById('stayPrice').value.trim());
-
-    // build a standalone security-deposit link Kim can send closer to check-in,
-    // regardless of whether the guest already authorized a hold during signing
-    const depositLinkData = {
-      bookingId: currentBookingId,
-      licenseeName: document.getElementById('licenseeName').value.trim() || 'Guest',
-      checkin: document.getElementById('checkin').value,
-      checkout: document.getElementById('checkout').value,
-      bond: document.getElementById('bond').value,
-      licenseeEmail: document.getElementById('licenseeEmail').value.trim()
-    };
-    const depositLinkEncoded = encodeURIComponent(b64EncodeUnicode(JSON.stringify(depositLinkData)));
-    const depositLink = 'https://book.howquahideaway.com.au/deposit-hold.html#data=' + depositLinkEncoded;
-    sendForm.append('bookingId', currentBookingId);
-    sendForm.append('depositLinkForKim', depositLink);
-    sendForm.append('pdfBase64', pdfBase64);
-
-    try {
-      const resp = await fetch(APPS_SCRIPT_URL, { method: 'POST', body: sendForm });
-      const result = await resp.json();
-      if (result.success) {
-        setStatus('Signed! Your copy has been emailed to the property owner' +
-          (guestEmail ? (result.guestSent ? ' and sent to your email.' : ' — sending your email copy failed, but the owner has your signed copy.') : '.') +
-          ' Setting up identity verification...');
-
-        // create a Didit verification session tied to this booking, then send the
-        // guest straight there — this is what lets the result come back linked
-        // to the right guest automatically, instead of a generic unlinked link
-        try {
-          const diditForm = new FormData();
-          diditForm.append('type', 'create-didit-session');
-          diditForm.append('bookingId', currentBookingId || '');
-          diditForm.append('licenseeName', licenseeName);
-          diditForm.append('licenseeEmail', guestEmail);
-          diditForm.append('checkin', document.getElementById('checkin').value);
-          diditForm.append('checkout', document.getElementById('checkout').value);
-          const diditResp = await fetch(APPS_SCRIPT_URL, { method: 'POST', body: diditForm });
-          const diditResult = await diditResp.json();
-          if (diditResult.success && diditResult.sessionUrl) {
-            setStatus('Signed! Taking you to identity verification now...');
-            setTimeout(() => {
-              window.location.href = diditResult.sessionUrl;
-            }, 1500);
-          } else {
-            setStatus('Signed and sent! Identity verification could not be started automatically (' +
-              (diditResult.message || 'unknown error') + ') — the owner will follow up with a verification link separately.');
-          }
-        } catch (diditErr) {
-          setStatus('Signed and sent! Identity verification could not be started automatically (' +
-            diditErr.message + ') — the owner will follow up with a verification link separately.');
-        }
-      } else {
-        setStatus('Your details were signed, but the email failed (' + (result.message || 'unknown error') + '). Please contact the owner directly.', '#a33');
-      }
-    } catch (err) {
-      setStatus('Your details were signed, but sending the email failed (' + err.message + '). Please contact the owner directly.', '#a33');
-    }
+    window.__signedPdf = { blob: pdfBlob, base64: pdfBase64, filename: filename, licenseeName: licenseeName };
+    await sendSignedLicence();
   } catch (err) {
     exitPdfMode();
-    setStatus('Error: ' + err.message, '#a33');
+    restoreSigningControls();
+    setStatus('Something went wrong preparing your document (' + err.message + '). Your signature has been kept — please press Sign & Send again.', '#a33');
   }
 });
+
+// Put the Sign & Send button (and signature controls) back after a failure before the PDF existed
+function restoreSigningControls() {
+  const submitBtn = document.getElementById('submitBtn');
+  submitBtn.disabled = false;
+  document.getElementById('guestActions').style.display = 'block';
+  document.querySelectorAll('.sig-controls').forEach(el => { el.style.display = ''; });
+  document.querySelectorAll('.signed-caption').forEach(el => el.remove());
+}
+
+// Shows "Try again" / "Download your signed copy" under the status message
+function showRecoveryBar(canRetry) {
+  let bar = document.getElementById('recoveryBar');
+  if (!bar) {
+    bar = document.createElement('div');
+    bar.id = 'recoveryBar';
+    bar.style.cssText = 'display:flex; gap:10px; justify-content:center; flex-wrap:wrap; margin:12px 0;';
+    document.getElementById('status').insertAdjacentElement('afterend', bar);
+  }
+  bar.innerHTML = '';
+  if (canRetry) {
+    const retry = document.createElement('button');
+    retry.textContent = 'Try again';
+    retry.style.cssText = 'background:#2b5540; color:#fff; border:none; padding:10px 18px; font-size:14px; border-radius:6px; cursor:pointer; font-family:Arial, sans-serif;';
+    retry.addEventListener('click', () => { bar.innerHTML = ''; sendSignedLicence(); });
+    bar.appendChild(retry);
+  }
+  const dl = document.createElement('button');
+  dl.textContent = 'Download your signed copy';
+  dl.style.cssText = 'background:#55503a; color:#fff; border:none; padding:10px 18px; font-size:14px; border-radius:6px; cursor:pointer; font-family:Arial, sans-serif;';
+  dl.addEventListener('click', () => {
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(window.__signedPdf.blob);
+    a.download = window.__signedPdf.filename;
+    document.body.appendChild(a); a.click(); a.remove();
+  });
+  bar.appendChild(dl);
+}
+
+// Sends the already-built PDF to the server. Safe to call more than once: the server recognises a
+// repeat for the same booking and won't block the calendar or email Kim twice.
+async function sendSignedLicence() {
+  const statusEl = document.getElementById('status');
+  function setStatus(text, color) { statusEl.style.display = 'block'; statusEl.style.color = color || '#2b5540'; statusEl.textContent = text; }
+  const bar = document.getElementById('recoveryBar'); if (bar) bar.innerHTML = '';
+  const pdfInfo = window.__signedPdf;
+  if (!pdfInfo) { setStatus('Nothing to send yet.', '#a33'); return; }
+  const licenseeName = pdfInfo.licenseeName;
+  const guestEmail = document.getElementById('licenseeEmail').value.trim();
+  const guestPhone = document.getElementById('licenseePhone').value.trim();
+  setStatus('Sending signed copy...');
+
+  const sendForm = new FormData();
+  sendForm.append('type', 'licence');
+  sendForm.append('licenseeName', licenseeName);
+  sendForm.append('licenseePhone', guestPhone);
+  sendForm.append('licenseeEmail', guestEmail);
+  sendForm.append('checkin', document.getElementById('checkin').value);
+  sendForm.append('checkout', document.getElementById('checkout').value);
+  sendForm.append('bond', document.getElementById('bond').value);
+  sendForm.append('stayPrice', document.getElementById('stayPrice').value.trim());
+
+  // standalone save-a-card link for Kim's email (used only when the booking has no guest email)
+  const depositLinkData = {
+    bookingId: currentBookingId,
+    licenseeName: licenseeName,
+    checkin: document.getElementById('checkin').value,
+    checkout: document.getElementById('checkout').value,
+    bond: document.getElementById('bond').value,
+    licenseeEmail: guestEmail
+  };
+  const depositLinkEncoded = encodeURIComponent(b64EncodeUnicode(JSON.stringify(depositLinkData)));
+  const depositLink = 'https://book.howquahideaway.com.au/deposit-hold.html#data=' + depositLinkEncoded;
+  sendForm.append('bookingId', currentBookingId);
+  sendForm.append('approvalCode', currentApprovalCode);
+  sendForm.append('depositLinkForKim', depositLink);
+  sendForm.append('pdfBase64', pdfInfo.base64);
+
+  let result;
+  try {
+    const resp = await fetch(APPS_SCRIPT_URL, { method: 'POST', body: sendForm });
+    result = await resp.json();
+  } catch (err) {
+    setStatus('Sending failed (' + err.message + '). Your signed document is ready — try again, or download it and email it to Howqua Hideaway.', '#a33');
+    showRecoveryBar(true);
+    return;
+  }
+
+  if (!result.success) {
+    if (result.conflict) {
+      // the dates were taken by someone else between approval and signing — nothing was recorded
+      setStatus(result.message, '#a33');
+      showRecoveryBar(false);
+    } else if (result.retryable) {
+      setStatus(result.message, '#a33');
+      showRecoveryBar(true);
+    } else {
+      setStatus('Your licence could not be accepted: ' + (result.message || 'unknown error') + ' Please contact Howqua Hideaway.', '#a33');
+      showRecoveryBar(false);
+    }
+    return;
+  }
+
+  setStatus('Signed! Your copy has been emailed to the property owner' +
+    (guestEmail ? (result.guestSent ? ' and sent to your email.' : ' — sending your email copy failed, but the owner has your signed copy.') : '.') +
+    ' Setting up identity verification...');
+
+  // create a Didit verification session tied to this booking, then send the guest straight there
+  try {
+    const diditForm = new FormData();
+    diditForm.append('type', 'create-didit-session');
+    diditForm.append('bookingId', currentBookingId || '');
+    diditForm.append('licenseeName', licenseeName);
+    diditForm.append('licenseeEmail', guestEmail);
+    diditForm.append('checkin', document.getElementById('checkin').value);
+    diditForm.append('checkout', document.getElementById('checkout').value);
+    const diditResp = await fetch(APPS_SCRIPT_URL, { method: 'POST', body: diditForm });
+    const diditResult = await diditResp.json();
+    if (diditResult.success && diditResult.sessionUrl) {
+      setStatus('Signed! Taking you to identity verification now...');
+      setTimeout(() => { window.location.href = diditResult.sessionUrl; }, 1500);
+    } else {
+      setStatus('Signed and sent! Identity verification could not be started automatically (' +
+        (diditResult.message || 'unknown error') + ') — you will be emailed a verification link separately.');
+    }
+  } catch (diditErr) {
+    setStatus('Signed and sent! Identity verification could not be started automatically (' +
+      diditErr.message + ') — you will be emailed a verification link separately.');
+  }
+}
 
 // ---------- PDF capture mode ----------
 // Swap every visible input/textarea for a static text block showing its value, freeze the guest

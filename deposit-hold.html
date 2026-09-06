@@ -51,7 +51,7 @@
     <div style="font-size: 14px; color: #444; margin-bottom: 14px; line-height: 1.55;">
       We keep a card on file to cover any damage or incidentals. <b>Nothing is charged now.</b>
       If something does need charging after your stay, you'll be told what and why first, and it will never be more than
-      <b><span id="depositAmountInline">$300</span></b>. Your card details are deleted automatically 14 days after check-out.
+      <b><span id="depositAmountInline">$500</span></b>. Your card details are deleted automatically 14 days after check-out.
     </div>
     <div style="text-align:center;">
       <button id="authorizeBondBtn">Save my card securely with Stripe</button>
@@ -94,30 +94,46 @@ if (hash.startsWith('#data=')) {
   row('Guest', bookingData.licenseeName || '(not provided)');
   row('Check-in', bookingData.checkin || '(not provided)');
   row('Check-out', bookingData.checkout || '(not provided)');
-  row('Charge cap', "$300 (only if there's damage)");
+  row('Charge cap', "$500 (only if there's damage)");
 })();
 
-// if we've just been returned from Stripe after the card was saved, show success and tell the backend to verify + record it
+// Back from Stripe: don't say "saved" until the server has checked with Stripe and recorded the card.
 const urlParams = new URLSearchParams(window.location.search);
 if (urlParams.get('paid') === 'true') {
   document.getElementById('authorizeBondBtn').style.display = 'none';
+  verifyCardSaved();
+}
+function verifyCardSaved() {
   const holdStatus = document.getElementById('bondHoldStatus');
+  const oldRetry = document.getElementById('verifyRetryBtn'); if (oldRetry) oldRetry.remove();
   holdStatus.style.color = '#2b5540';
-  holdStatus.textContent = '✓ Card saved. Nothing has been charged. You can close this page now.';
-
-  // only notify once per session — a refresh of this page shouldn't re-email Kim
-  const notifiedKey = 'notified_' + (urlParams.get('session_id') || '');
-  const alreadyNotified = (function () { try { return sessionStorage.getItem(notifiedKey); } catch (e) { return null; } })();
-  if (!alreadyNotified) {
-  try { sessionStorage.setItem(notifiedKey, '1'); } catch (e) {}
+  holdStatus.textContent = 'Verifying your card with Stripe…';
   const notifyForm = new FormData();
   notifyForm.append('type', 'notify-card-saved');
   notifyForm.append('bookingId', bookingData.bookingId || '');
   notifyForm.append('licenseeName', bookingData.licenseeName || 'Guest');
   notifyForm.append('bond', bookingData.bond || '');
   notifyForm.append('sessionId', urlParams.get('session_id') || '');
-  fetch(APPS_SCRIPT_URL, { method: 'POST', body: notifyForm }).catch(() => {});
-  }
+  fetch(APPS_SCRIPT_URL, { method: 'POST', body: notifyForm })
+    .then(function (r) { return r.json(); })
+    .then(function (res) {
+      if (res && res.success) {
+        holdStatus.textContent = '✓ Card saved' + (res.card ? ' (' + res.card + ')' : '') + '. Nothing has been charged. You can close this page now.';
+      } else {
+        showVerifyFailure((res && res.message) || 'unknown error');
+      }
+    })
+    .catch(function (err) { showVerifyFailure(err.message); });
+}
+function showVerifyFailure(msg) {
+  const holdStatus = document.getElementById('bondHoldStatus');
+  holdStatus.style.color = '#a33';
+  holdStatus.textContent = 'We could not confirm your card was saved (' + msg + '). Please try again — if it keeps failing, contact Howqua Hideaway.';
+  const btn = document.createElement('button');
+  btn.id = 'verifyRetryBtn'; btn.textContent = 'Check again';
+  btn.style.cssText = 'display:block; margin:10px auto 0; background:#2b5540; color:#fff; border:none; padding:9px 16px; border-radius:6px; cursor:pointer; font-size:14px;';
+  btn.addEventListener('click', verifyCardSaved);
+  holdStatus.insertAdjacentElement('afterend', btn);
 }
 
 document.getElementById('authorizeBondBtn').addEventListener('click', async () => {

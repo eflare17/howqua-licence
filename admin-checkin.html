@@ -388,7 +388,7 @@ function progressBar(b) {
   return '<div class="progress"><div class="segs">' + segs + '</div><div class="seg-labels">' + labels + '</div></div>';
 }
 
-var SECURITY_CAP_AUD = 300; // must match Code.gs
+var SECURITY_CAP_AUD = 500; // must match Code.gs
 
 // Everything from the sheet started life as something a guest typed into a public form.
 // Escape it before it goes anywhere near innerHTML, or a "name" like <script>… runs as Kim.
@@ -517,6 +517,11 @@ function checkinMissingSteps(b) {
   return missing;
 }
 function confirmCheckinSend(b, guestName, email) {
+  if (!b) {
+    // the pipeline hasn't loaded (or this calendar event has no booking on the sheet) — we can't check anything
+    return confirm('Are you sure you want to proceed?\n\nThis booking could not be found in the pipeline, so it is UNKNOWN whether ' + guestName +
+      ' has signed the licence, verified their ID or saved a card.\n\nThe check-in email includes the lockbox code. Send it anyway?');
+  }
   var missing = checkinMissingSteps(b);
   if (missing.length) {
     return confirm('Are you sure you want to proceed?\n\nFor ' + guestName + ':\n\u2022 ' + missing.join('\n\u2022 ') +
@@ -652,6 +657,8 @@ function renderPipeline(bookings) {
         var left = Math.max(0, SECURITY_CAP_AUD - already);
         var f = document.createElement('div');
         f.className = 'charge-form';
+        // one reference per intended charge — reused if Kim retries, so the server can never charge it twice
+        f.dataset.operationId = (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : ('op-' + Date.now() + '-' + Math.random().toString(36).slice(2, 10));
         f.innerHTML =
           '<div class="charge-title">Charge ' + esc(b.guestName) + '\u2019s card <span class="hint" style="display:inline;margin:0;">(up to $' + left.toFixed(2) + ' remaining of the $' + SECURITY_CAP_AUD + ' cap)</span></div>' +
           '<div class="charge-row"><label>Amount ($)</label><input type="text" inputmode="decimal" class="charge-amount" placeholder="e.g. 45.00"></div>' +
@@ -668,9 +675,11 @@ function renderPipeline(bookings) {
           if (!reason) { pipelineStatus(b.bookingId, 'Enter a reason \u2014 the guest sees it.', false); return; }
           if (!confirm('Charge $' + amt.toFixed(2) + ' to ' + b.guestName + '\u2019s card for: ' + reason + '\n\nThey will be emailed this notice first. Go ahead?')) return;
           f.querySelector('.charge-go').disabled = true; pipelineStatus(b.bookingId, 'Emailing notice, then charging\u2026', true);
+          f.querySelector('.charge-amount').readOnly = true; f.querySelector('.charge-reason').readOnly = true; // a retry must be the SAME charge — start a new form for a different one
           var fd = new FormData();
           fd.append('type', 'charge-card'); fd.append('password', password);
           fd.append('bookingId', b.bookingId); fd.append('amount', amt.toFixed(2)); fd.append('reason', reason);
+          fd.append('operationId', f.dataset.operationId);
           fetch(SCRIPT_URL, { method: 'POST', body: fd }).then(function (r) { return r.json(); }).then(function (res) {
             pipelineStatus(b.bookingId, res.message || (res.success ? '\u2713 Charged.' : 'Failed.'), res.success);
             if (res.success) { f.remove(); loadPipeline(); } else { f.querySelector('.charge-go').disabled = false; }
