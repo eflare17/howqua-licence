@@ -158,7 +158,7 @@
 
   <div id="adminPanel">
     <h2>Booking pipeline</h2>
-    <div class="hint">Every booking, soonest stay first. The bar on each card shows how far along it is; finished stays fade to grey, and anything arriving within a week that is not signed, ID-verified and card-on-file turns red. Generate the signing link for new requests, resend the card link if a guest hasn't saved one, charge a saved card if there's damage, or send check-in instructions.</div>
+    <div class="hint">Every booking, soonest stay first. The bar on each card shows how far along it is; finished stays fade to grey, and anything arriving within a week that is not signed, ID-verified and card-on-file turns red. Generate the signing link for new requests, resend the card link if a guest hasn't saved one, send the invoice and mark it paid when the money lands, charge a saved card if there's damage, or send check-in instructions.</div>
     <div id="pipelineList">
       <div class="bunny-run" aria-label="Loading bookings">
         <div class="bunny-track">
@@ -204,6 +204,27 @@
     <label>Message</label>
     <textarea id="h_body" style="min-height:220px;"></textarea>
     <button class="btn" id="saveHoldBtn" type="button">Save card email</button>
+    </details>
+
+    <details class="settings">
+    <summary><h2>Invoicing</h2><span class="hint">bank details, ABN, card payments — tap to open</span></summary>
+    <div class="hint">"Send invoice" on a booking emails the guest an invoice for the Stay Price on the licence, with these bank details and the booking ID as the payment reference. Invoice numbers run in order automatically (HH-INV-0001, 0002…). If it's still unpaid a day later the guest gets one reminder; once the money lands, tap "Mark paid".</div>
+    <label>Account name</label>
+    <input id="inv_accountName" style="max-width:320px;">
+    <label>BSB</label>
+    <input id="inv_bsb" style="max-width:160px;" inputmode="numeric">
+    <label>Account number</label>
+    <input id="inv_accountNumber" style="max-width:220px;" inputmode="numeric">
+    <label>ABN (shown on the invoice — leave blank to hide)</label>
+    <input id="inv_abn" style="max-width:220px;">
+    <label>Days until due</label>
+    <input id="inv_dueDays" type="number" min="1" max="60" style="max-width:100px;">
+    <label>Note at the bottom of the invoice (optional)</label>
+    <textarea id="inv_footerNote" style="min-height:60px;"></textarea>
+    <label style="display:flex; align-items:center; gap:8px; margin-top:16px; cursor:pointer;"><input type="checkbox" id="inv_cardPayments" style="width:auto; margin:0;"> Accept card payments on invoices (Stripe)</label>
+    <div class="hint">Off = bank transfer only. On = invoices sent from then on also get an "Or pay by card" button; card payments are marked paid automatically. Stripe's fee comes out of the payment (about 1.7% + 30c) — surcharging isn't allowed from 1 Oct 2026. Invoices already sent aren't changed.</div>
+    <label style="display:flex; align-items:center; gap:8px; margin-top:12px; cursor:pointer;"><input type="checkbox" id="inv_attachPdf" style="width:auto; margin:0;"> Attach a PDF copy to invoice emails</label>
+    <button class="btn" id="saveInvoiceBtn" type="button">Save invoice settings</button>
     </details>
 
     <details class="settings">
@@ -281,6 +302,7 @@ var STAGES = [
   { key: 'signed',    label: 'Signed',    color: '#1a5289' },
   { key: 'id',        label: 'ID',        color: '#a0522d' },
   { key: 'card',      label: 'Card',      color: '#0f766e' },
+  { key: 'paid',      label: 'Paid',      color: '#2b5540' },
   { key: 'checkin',   label: 'Check-in',  color: '#6b4fa0' },
   { key: 'closed',    label: 'Removed',   color: '#5a6b60' }
 ];
@@ -291,6 +313,16 @@ function cardOnFile(b) {
 }
 function cardRemoved(b) { return (b.cardStatus || '').toLowerCase() === 'removed'; }
 function cardCharged(b) { var cs = (b.cardStatus || '').toLowerCase(); return cs === 'charged' || cs === 'refunded'; }
+// invoice state, written by "Send invoice" / "Mark paid" / the Stripe webhook
+function invoicePaid(b) { return !!b.paidOn; }
+function invoiceSent(b) { return !!b.invoiceSent; }
+function invoiceOverdue(b) {
+  if (!invoiceSent(b) || invoicePaid(b) || !b.invoiceDue) return false;
+  var iso = toIso(b.invoiceDue); if (!iso) return false;
+  var today = new Date(); today.setHours(0, 0, 0, 0);
+  var p = iso.split('-'); var due = new Date(+p[0], +p[1] - 1, +p[2]);
+  return today > due;
+}
 // a booking made before card-on-file existed (Sep 2026) still carries a hold
 function isLegacyHold(b) { return !b.stripePaymentMethod && !!b.holdStatus; }
 // ID verification result, written to the sheet by the Didit webhook
@@ -314,6 +346,7 @@ function milestones(b) {
     id:        idApproved(b),
     card:      cardOnFile(b) || (cardRemoved(b) && b.isPast)
                || (isLegacyHold(b) && (hs === 'held' || (holdIsFinal(b) && b.isPast))),
+    paid:      invoicePaid(b),
     checkin:   !!b.checkinSent,
     closed:    (cardRemoved(b) && b.isPast) || (isLegacyHold(b) && holdIsFinal(b) && b.isPast) || b.status === 'Completed'
   };
@@ -356,6 +389,7 @@ function milestoneTimes(b) {
     signed:    b.signedOn || '',
     id:        (idApproved(b) || idDeclined(b)) ? (b.idUpdated || '') : '',
     card:      b.cardSaved || (isLegacyHold(b) && hs === 'held' ? (b.holdUpdated || '') : ''),
+    paid:      b.paidOn || '',
     checkin:   b.checkinSentOn || '',
     closed:    b.cardRemoved || (isLegacyHold(b) && holdIsFinal(b) ? (b.holdUpdated || '') : '')
   };
@@ -415,7 +449,7 @@ function isUrgent(b) {
   var n = daysUntil(b);
   if (n === null || n < 0 || n > 7) return false;
   var m = milestones(b);
-  return !m.signed || !m.id || !m.card;
+  return !m.signed || !m.id || !m.card || (invoiceSent(b) && !invoicePaid(b));
 }
 function urgentReason(b) {
   var m = milestones(b);
@@ -423,6 +457,7 @@ function urgentReason(b) {
   if (idDeclined(b)) return 'ID was declined';
   if (!m.id) return 'ID not verified yet';
   if (!m.card) return 'No card on file yet';
+  if (invoiceSent(b) && !invoicePaid(b)) return 'Invoice not paid yet';
   return '';
 }
 function daysBadge(b) {
@@ -456,6 +491,14 @@ function holdDetail(b) {
     var idWord = String(b.idStatus || 'started').replace(/_/g, ' ').toLowerCase();
     parts.push('ID check ' + esc(idWord) + (b.idUpdated ? ' (' + esc(shortDate(b.idUpdated)) + ')' : ''));
   }
+  // invoice — sent / due / paid
+  if (invoicePaid(b)) parts.push('Invoice ' + esc(b.invoiceNo || '') + ' paid ' + esc(shortDate(b.paidOn)) + (b.paidVia ? ' (' + esc(b.paidVia.toLowerCase()) + ')' : ''));
+  else if (invoiceSent(b)) {
+    var invTxt = 'Invoice ' + esc(b.invoiceNo || '') + ' sent ' + esc(shortDate(b.invoiceSent)) + (b.invoiceDue ? (invoiceOverdue(b) ? ' — <span style="color:#a33;font-weight:bold;">overdue since ' + esc(shortDate(b.invoiceDue)) + '</span>' : ' · due ' + esc(shortDate(b.invoiceDue))) : '');
+    if (b.invoiceReminderSent) invTxt += ' · reminder sent ' + esc(shortDate(b.invoiceReminderSent));
+    parts.push(invTxt);
+  }
+  else if (!b.isPast && (b.status === 'Signed' || b.status === 'Deposit Held' || b.status === 'Card on file')) parts.push(b.stayPrice ? 'Invoice not sent yet' : 'No stay price on the licence yet — needed before invoicing');
   // check-in instructions — only worth saying once there's a stay to send them for
   if (b.checkinSent) parts.push('Check-in instructions sent');
   else if (b.calendarEventId && !b.isPast) parts.push('Check-in instructions not sent yet');
@@ -514,6 +557,7 @@ function checkinMissingSteps(b) {
   else if (!idApproved(b)) missing.push('ID has NOT been verified');
   var legacyHeld = isLegacyHold(b) && (b.holdStatus || '').toLowerCase() === 'held';
   if (!cardOnFile(b) && !legacyHeld) missing.push('NO card details have been saved');
+  if (!invoicePaid(b)) missing.push(invoiceSent(b) ? 'the invoice has NOT been paid' : 'NO invoice has been sent');
   return missing;
 }
 function confirmCheckinSend(b, guestName, email) {
@@ -717,6 +761,68 @@ function renderPipeline(bookings) {
       });
       actions.appendChild(rmBtn);
     }
+    // ---- Invoice: send / resend / mark paid ----
+    var signedForInvoice = b.status === 'Signed' || b.status === 'Deposit Held' || b.status === 'Card on file';
+    if (signedForInvoice && !b.isPast && !invoicePaid(b) && b.email && b.stayPrice) {
+      var invBtn = document.createElement('button');
+      invBtn.className = 'btn small'; invBtn.type = 'button';
+      invBtn.textContent = invoiceSent(b) ? 'Resend invoice' : 'Send invoice';
+      invBtn.title = invoiceSent(b) ? 'Emails the same invoice (' + b.invoiceNo + ') again' : 'Emails the guest an invoice for ' + b.stayPrice + ' with the bank details';
+      invBtn.addEventListener('click', function () {
+        var q = invoiceSent(b)
+          ? 'Email invoice ' + b.invoiceNo + ' to ' + b.guestName + ' (' + b.email + ') again?'
+          : 'Email ' + b.guestName + ' (' + b.email + ') an invoice for ' + b.stayPrice + '?\n\nThe amount comes from the Stay Price on the licence — change it there first if it\u2019s wrong.';
+        if (!confirm(q)) return;
+        invBtn.disabled = true; pipelineStatus(b.bookingId, 'Sending invoice\u2026', true);
+        var fd = new FormData();
+        fd.append('type', 'send-invoice'); fd.append('password', password); fd.append('bookingId', b.bookingId);
+        fetch(SCRIPT_URL, { method: 'POST', body: fd }).then(function (r) { return r.json(); }).then(function (res) {
+          pipelineStatus(b.bookingId, res.message || (res.success ? '\u2713 Invoice emailed.' : 'Failed.'), res.success);
+          invBtn.disabled = false;
+          if (res.success) loadPipeline();
+        }).catch(function (e) { pipelineStatus(b.bookingId, 'Could not send: ' + e.message, false); invBtn.disabled = false; });
+      });
+      actions.appendChild(invBtn);
+    }
+    if (invoiceSent(b) && !invoicePaid(b)) {
+      var paidBtn = document.createElement('button');
+      paidBtn.className = 'btn small'; paidBtn.type = 'button'; paidBtn.textContent = 'Mark paid';
+      paidBtn.title = 'Use this once the bank transfer has landed. Card payments are marked automatically.';
+      paidBtn.addEventListener('click', function () {
+        if (!confirm('Mark invoice ' + b.invoiceNo + ' (' + (b.invoiceAmount || b.stayPrice) + ') as paid by bank transfer?' + (b.email ? '\n\nA "payment received" email will go to ' + b.email + '.' : ''))) return;
+        paidBtn.disabled = true; pipelineStatus(b.bookingId, 'Marking paid\u2026', true);
+        var fd = new FormData();
+        fd.append('type', 'mark-invoice-paid'); fd.append('password', password); fd.append('bookingId', b.bookingId);
+        fetch(SCRIPT_URL, { method: 'POST', body: fd }).then(function (r) { return r.json(); }).then(function (res) {
+          pipelineStatus(b.bookingId, res.message || (res.success ? '\u2713 Marked paid.' : 'Failed.'), res.success);
+          if (res.success) loadPipeline(); else paidBtn.disabled = false;
+        }).catch(function (e) { pipelineStatus(b.bookingId, 'Could not update: ' + e.message, false); paidBtn.disabled = false; });
+      });
+      actions.appendChild(paidBtn);
+    }
+    if (invoicePaid(b) && (b.paidVia || '').toLowerCase() !== 'card' && !b.isPast) {
+      var unpaidBtn = document.createElement('button');
+      unpaidBtn.className = 'btn small'; unpaidBtn.type = 'button'; unpaidBtn.textContent = 'Mark unpaid'; unpaidBtn.style.background = '#888';
+      unpaidBtn.title = 'Undo a Mark paid made by mistake';
+      unpaidBtn.addEventListener('click', function () {
+        if (!confirm('Mark invoice ' + b.invoiceNo + ' as NOT paid? (Use this only if it was marked paid by mistake.)')) return;
+        unpaidBtn.disabled = true;
+        var fd = new FormData();
+        fd.append('type', 'mark-invoice-paid'); fd.append('password', password); fd.append('bookingId', b.bookingId); fd.append('undo', '1');
+        fetch(SCRIPT_URL, { method: 'POST', body: fd }).then(function (r) { return r.json(); }).then(function (res) {
+          pipelineStatus(b.bookingId, res.message || '', res.success);
+          if (res.success) loadPipeline(); else unpaidBtn.disabled = false;
+        }).catch(function (e) { pipelineStatus(b.bookingId, 'Could not update: ' + e.message, false); unpaidBtn.disabled = false; });
+      });
+      actions.appendChild(unpaidBtn);
+    }
+    if (b.invoiceNo && b.invoiceToken) {
+      var invLink = document.createElement('a');
+      invLink.className = 'btn small'; invLink.target = '_blank'; invLink.rel = 'noopener'; invLink.textContent = 'View invoice';
+      invLink.style.background = '#fff'; invLink.style.color = '#2b5540'; invLink.style.border = '1px solid #2b5540';
+      invLink.href = SCRIPT_URL + '?action=invoice&b=' + encodeURIComponent(b.bookingId) + '&t=' + encodeURIComponent(b.invoiceToken);
+      actions.appendChild(invLink);
+    }
     if (b.stripeCustomer || b.stripeReference) {
       var stripeLink = document.createElement('a');
       stripeLink.className = 'btn small'; stripeLink.target = '_blank'; stripeLink.textContent = 'View in Stripe';
@@ -815,6 +921,7 @@ function load(pipelineAlreadyLoading) {
     document.getElementById('adminPanel').style.display = 'block';
     FIELD_IDS.forEach(function (k) { document.getElementById('f_' + k).value = res.content[k] || ''; });
     if (res.holdEmail) { document.getElementById('h_subject').value = res.holdEmail.subject || ''; document.getElementById('h_body').value = res.holdEmail.body || ''; }
+    if (res.invoiceSettings) fillInvoiceSettings(res.invoiceSettings);
     renderBookings(res.bookings || []);
     if (!pipelineAlreadyLoading) loadPipeline();
     setStatus('', true);
@@ -885,6 +992,24 @@ function buildSheetForImage(content) {
   document.body.appendChild(d);
   return d;
 }
+var INVOICE_TEXT_FIELDS = ['accountName', 'bsb', 'accountNumber', 'abn', 'dueDays', 'footerNote'];
+function fillInvoiceSettings(s) {
+  INVOICE_TEXT_FIELDS.forEach(function (k) { document.getElementById('inv_' + k).value = (s[k] === undefined || s[k] === null) ? '' : s[k]; });
+  document.getElementById('inv_cardPayments').checked = !!s.cardPayments;
+  document.getElementById('inv_attachPdf').checked = s.attachPdf !== false;
+}
+document.getElementById('saveInvoiceBtn').addEventListener('click', function () {
+  var fields = { sub: 'save-invoice-settings' };
+  INVOICE_TEXT_FIELDS.forEach(function (k) { fields[k] = document.getElementById('inv_' + k).value.trim(); });
+  fields.cardPayments = document.getElementById('inv_cardPayments').checked ? 'true' : 'false';
+  fields.attachPdf = document.getElementById('inv_attachPdf').checked ? 'true' : 'false';
+  if (fields.cardPayments === 'true' && !confirm('Turn card payments ON for invoices? Guests will get an "Or pay by card" button and Stripe\u2019s fee comes out of each card payment.')) return;
+  setStatus('Saving invoice settings\u2026', true);
+  api(fields).then(function (res) {
+    setStatus(res.message, res.success);
+    if (res.success && res.invoiceSettings) fillInvoiceSettings(res.invoiceSettings);
+  }).catch(function () { setStatus('Could not save invoice settings.', false); });
+});
 document.getElementById('saveHoldBtn').addEventListener('click', function () {
   setStatus('Saving hold email…', true);
   api({ sub: 'save-hold-email', subject: document.getElementById('h_subject').value, body: document.getElementById('h_body').value })
