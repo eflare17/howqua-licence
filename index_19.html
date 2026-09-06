@@ -422,6 +422,14 @@ document.getElementById('licenseeName').addEventListener('input', function () {
 });
 
 // Keep the hidden full-name field in sync with the first/last name inputs
+// small stable hash of the house-rules text, so the server can tell the rules the guest signed are the
+// rules Kim approved (same function used on approval and on signing)
+function rulesHash(text) {
+  let h = 5381;
+  const t = String(text || '').replace(/\r/g, '').trim();
+  for (let i = 0; i < t.length; i++) h = ((h << 5) + h + t.charCodeAt(i)) >>> 0;
+  return 'r' + h.toString(16);
+}
 function syncLicenseeName() {
   const first = document.getElementById('licenseeFirstName').value.trim();
   const last = document.getElementById('licenseeLastName').value.trim();
@@ -742,6 +750,8 @@ document.getElementById('genLinkBtn').addEventListener('click', async () => {
     af.append('bookingId', currentBookingId);
     af.append('checkin', document.getElementById('checkin').value);
     af.append('checkout', document.getElementById('checkout').value);
+    af.append('stayPrice', document.getElementById('stayPrice').value.trim());
+    af.append('rulesHash', rulesHash(rulesBox.value));
     const ar = await fetch(APPS_SCRIPT_URL, { method: 'POST', body: af });
     const aj = await ar.json();
     if (!aj.success || !aj.approvalCode) throw new Error(aj.message || 'unknown error');
@@ -1114,6 +1124,7 @@ async function sendSignedLicence() {
   const depositLink = 'https://book.howquahideaway.com.au/deposit-hold.html#data=' + depositLinkEncoded;
   sendForm.append('bookingId', currentBookingId);
   sendForm.append('approvalCode', currentApprovalCode);
+  sendForm.append('rulesHash', rulesHash(rulesBox.value));
   sendForm.append('depositLinkForKim', depositLink);
   sendForm.append('pdfBase64', pdfInfo.base64);
 
@@ -1142,9 +1153,17 @@ async function sendSignedLicence() {
     return;
   }
 
-  setStatus('Signed! Your copy has been emailed to the property owner' +
-    (guestEmail ? (result.guestSent ? ' and sent to your email.' : ' — sending your email copy failed, but the owner has your signed copy.') : '.') +
-    ' Setting up identity verification...');
+  if (result.ownerSent === false || (guestEmail && result.guestSent === false)) {
+    // signed and the dates are secured, but a copy didn't go out — let them resend without re-signing
+    const missing = [];
+    if (result.ownerSent === false) missing.push('Howqua Hideaway’s copy');
+    if (guestEmail && result.guestSent === false) missing.push('your copy');
+    setStatus('Your licence is signed and your dates are secured, but ' + missing.join(' and ') + ' could not be emailed just now. Please press "Try again" to resend' +
+      (result.pdfStored ? '' : ', or download your signed copy') + '.', '#a33');
+    showRecoveryBar(true);
+    return;
+  }
+  setStatus('Signed! Your copy has been emailed to the property owner' + (guestEmail ? ' and sent to your email.' : '.') + ' Setting up identity verification...');
 
   // create a Didit verification session tied to this booking, then send the guest straight there
   try {
