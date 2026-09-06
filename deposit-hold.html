@@ -152,6 +152,7 @@ document.getElementById('authorizeBondBtn').addEventListener('click', async () =
     const form = new FormData();
     form.append('type', 'create-card-session');
     form.append('bookingId', bookingData.bookingId || '');
+    form.append('k', bookingData.k || '');
     form.append('licenseeName', bookingData.licenseeName || '');
     form.append('licenseeEmail', bookingData.licenseeEmail || '');
     form.append('checkin', bookingData.checkin || '');

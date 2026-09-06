@@ -675,16 +675,15 @@ function renderPipeline(bookings) {
       var depBtn = document.createElement('button');
       depBtn.className = 'btn small'; depBtn.type = 'button'; depBtn.textContent = 'Copy card link';
       depBtn.addEventListener('click', function () {
-        var longLink = pipelineDepositLink(b);
-        depBtn.disabled = true; pipelineStatus(b.bookingId, 'Creating short link…', true);
+        depBtn.disabled = true; pipelineStatus(b.bookingId, 'Creating link…', true);
         var fd = new FormData();
-        fd.append('type', 'shorten'); fd.append('longUrl', longLink);
+        fd.append('type', 'get-card-link'); fd.append('password', password); fd.append('bookingId', b.bookingId);
         fetch(SCRIPT_URL, { method: 'POST', body: fd }).then(function (r) { return r.json(); }).then(function (res) {
           depBtn.disabled = false;
-          copyWithFallback((res.success && res.shortUrl) ? res.shortUrl : longLink, b.bookingId, '✓ Card link copied — no email on this booking, so text or message it to the guest.');
-        }).catch(function () {
-          depBtn.disabled = false;
-          copyWithFallback(longLink, b.bookingId, '✓ Card link copied (full-length — shortener unavailable).');
+          if (!res.success) { pipelineStatus(b.bookingId, res.message || 'Could not create the link.', false); return; }
+          copyWithFallback(res.link, b.bookingId, '✓ Card link copied — no email on this booking, so text or message it to the guest.');
+        }).catch(function (e) {
+          depBtn.disabled = false; pipelineStatus(b.bookingId, 'Could not create the link: ' + e.message, false);
         });
       });
       actions.appendChild(depBtn);
